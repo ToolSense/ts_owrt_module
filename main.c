@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
+#include "mkjson.h"
 #include "mqtt_connect.h"
 
 #define DELAY_SEND_TIME 5 //sec
@@ -18,7 +19,7 @@ bool send_mqtt_1m = false;
 struct DataStruct
 {
 	int temp;
-	time_t t;
+	time_t time;
 } data;
 
 struct mqttServerSetting mqttSetting; 
@@ -47,16 +48,25 @@ void timer_init()
 
 int send_data(struct DataStruct data)
 {
-	char *buf = malloc(64);
+	// char *buf = malloc(64);
+	// sprintf(buf,"\nUnix time: %d",data.time);
+	// int rc = mqtt_send(buf, "temp");
 
-	sprintf(buf,"\nCurrent time is: %d",data.t);
-	int rc = mqtt_send(buf, "temp");
+	char *json = mkjson( MKJSON_OBJ, 2,
+			MKJSON_INT, "temp", data.temp,
+			MKJSON_LLINT, "time", data.time
+			);
+	printf("%s\n", json);
+	int rc = mqtt_send(json, "temp");
+		
 	return rc;
 }
 
 int main(int argc, char *argv[])
 {
 	printf("\r\nMosquitto test SSL\r\n");
+
+	timer_init();
 
 	mqttSetting.host = "m15.cloudmqtt.com";
 	mqttSetting.port = PORT_SSL;
@@ -65,14 +75,13 @@ int main(int argc, char *argv[])
 	mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
 
 	mqtt_init(mqttSetting);
-	timer_init();
 
 	while(1) {
 
 		if (send_mqtt_1m) {
 
 			data.temp = 24;
-			time(&data.t);
+			time(&data.time);
 
 			// mqtt_send("Test\n", "temp");
 			send_data(data);
