@@ -16,11 +16,13 @@
 
 bool send_mqtt_1m = false;
 
-struct DataStruct
+typedef struct DataStruct
 {
 	int temp;
 	time_t time;
-} data;
+} t_data;
+
+t_data data;
 
 struct mqttServerSetting mqttSetting; 
 
@@ -46,18 +48,30 @@ void timer_init()
 	setitimer(ITIMER_REAL, &tv, NULL);
 }
 
-int send_data(struct DataStruct data)
+int send_data(t_data data)
 {
-	// char *buf = malloc(64);
+	char *buf = malloc(64);
 	// sprintf(buf,"\nUnix time: %d",data.time);
 	// int rc = mqtt_send(buf, "temp");
 
-	char *json = mkjson( MKJSON_OBJ, 2,
-			MKJSON_INT, "temp", data.temp,
-			MKJSON_LLINT, "time", data.time
-			);
-	printf("%s\n", json);
-	int rc = mqtt_send(json, "temp");
+	// char *json  = mkjson( MKJSON_OBJ, 2,
+	// 		MKJSON_INT, "temp", data.temp,
+	// 		MKJSON_LLINT, "time", data.time
+	// 		);
+
+	//Temporary solution
+	sprintf (buf, "{\"temp\": %d, \"time\": %d}", data.temp, data.time);
+	printf("%s\n", buf);
+
+
+	int rc = mqtt_send(buf, "temp");
+
+	// char *json = mkjson( MKJSON_OBJ, 2,
+	// 		MKJSON_INT, "temp", data.temp,
+	// 		MKJSON_LLINT, "time", data.time
+	// 		);
+	// printf("%s\n", json);
+	// int rc = mqtt_send(json, "temp");
 		
 	return rc;
 }
