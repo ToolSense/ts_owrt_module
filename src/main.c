@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,8 +8,11 @@
 #include <signal.h>
 #include <stdbool.h>
 
-#include "mkjson.h"
 #include "mqtt_connect.h"
+
+// modbus_connect begin
+#include "modbus_connect.h"
+// modbus_connect end
 
 #define DELAY_SEND_TIME 5 //sec
 // #define PORT 10333
@@ -54,30 +58,24 @@ int send_data(t_data data)
 	// sprintf(buf,"\nUnix time: %d",data.time);
 	// int rc = mqtt_send(buf, "temp");
 
-	// char *json  = mkjson( MKJSON_OBJ, 2,
-	// 		MKJSON_INT, "temp", data.temp,
-	// 		MKJSON_LLINT, "time", data.time
-	// 		);
-
 	//Temporary solution
 	sprintf (buf, "{\"temp\": %d, \"time\": %d}", data.temp, data.time);
 	printf("%s\n", buf);
 
 
 	int rc = mqtt_send(buf, "temp");
-
-	// char *json = mkjson( MKJSON_OBJ, 2,
-	// 		MKJSON_INT, "temp", data.temp,
-	// 		MKJSON_LLINT, "time", data.time
-	// 		);
-	// printf("%s\n", json);
-	// int rc = mqtt_send(json, "temp");
 		
 	return rc;
 }
 
 int main(int argc, char *argv[])
 {
+	// modbus_connect begin
+	ModbusError           status;
+	ModbusClientsList     clientsList;
+	ModbusClientsDataList clientsDataList;
+	// modbus_connect end
+
 	printf("\r\nMosquitto test SSL\r\n");
 
 	timer_init();
@@ -88,13 +86,64 @@ int main(int argc, char *argv[])
 	mqttSetting.passwd = "odUivT2WEIsW";
 	mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
 
+	// modbus_connect begin
+	clientsList.clientsCnt = 1;               // One client
+	clientsList.clients[0].id = 1;            // Client id
+	clientsList.clients[0].port = 502;        // Port
+	clientsList.clients[0].offset = 0;        // Bytes offset
+	clientsList.clients[0].numOfBytes = 1;    // Bytes num
+	snprintf(clientsList.clients[0].ipAdress, IP_BUF_SIZE, "%s", "192.168.1.9"); // Ip
+
+	status = modbusInit(&clientsList);
+
+	if(status == MBE_OK)
+	{
+		fprintf(stdout, "Modbus: Init OK\n");
+	}
+	else if(status == MBE_NOT_ALL)
+	{
+		fprintf(stdout, "Modbus: Not all clients inited\n");
+	}
+	else
+	{
+		fprintf(stdout, "Modbus: Init error\n");
+		modbusDeinit();
+	}
+	// modbus_connect end
+
 	mqtt_init(mqttSetting);
 
 	while(1) {
 
 		if (send_mqtt_1m) {
 
-			data.temp = 24;
+			// modbus_connect begin
+			// Receive data
+			status = modbusReceiveData(&clientsDataList);
+
+			if(status == MBE_OK)
+			{
+				fprintf(stdout, "Modbus: Receive OK\n");
+			}
+			else if(status == MBE_NOT_ALL)
+			{
+				fprintf(stdout, "Modbus: Not all clients send data\n");
+				modbusReconnect();
+			}
+			else
+			{
+				fprintf(stdout, "Modbus: Receive error\n");
+				modbusReconnect();
+			}
+			
+
+			printf("Id:%2d temp=%6d \t (0x%X)\n", clientsDataList.clients[0].clientId, 
+											  clientsDataList.clients[0].data[0], 
+											  clientsDataList.clients[0].data[0]);
+
+			data.temp = clientsDataList.clients[0].data[0];
+			// modbus_connect end
+
 			time(&data.time);
 
 			// mqtt_send("Test\n", "temp");
@@ -106,6 +155,10 @@ int main(int argc, char *argv[])
 
 	}
 
+	// modbus_connect begin
+	// modbusDeinit();
+	// modbus_connect end
+	
 	// mosquitto_loop_forever(mosq, -1, 1);
 	// mosquitto_destroy(mosq);
 	// mosquitto_lib_cleanup();

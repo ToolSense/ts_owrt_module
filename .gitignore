@@ -1,4 +1,2 @@
-ts_owrt_module
-main.o
-mqtt_connect.o
-mkjson.o
+.src/ts_owrt_module
+*.o
