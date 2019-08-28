@@ -4,7 +4,7 @@ all: ts_owrt_module
 # These variables hold the name of the compilation tool, the compilation flags and the link flags
 # We make use of these variables in the package manifest
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -I/usr/include/modbus
 LIBS=-lmodbus -lmosquitto
  
 # This variable identifies all header files in the directory; we use it to create a dependency chain between the object files and the source files
@@ -25,7 +25,7 @@ OBJ = $(patsubst %.c, %.o, $(SRC))
 # We use automatic variables to specify the final executable name 'ts_owrt_module', using '$@' and the '$^' will hold the names of all the
 # dependencies of this rule
 ts_owrt_module: $(OBJ)
-		$(CC) -o $@ $^ $(LDFLAGS) $(LIBS)
+		$(CC) -o $@ $^ $(LDFLAGS) $(LIBS) 
  
 # To clean build artifacts, we specify a 'clean' rule, and use PHONY to indicate that this rule never matches with a potential file in the directory
 .PHONY: clean
