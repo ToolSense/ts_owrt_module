@@ -5,7 +5,7 @@ all: ts_owrt_module
 # We make use of these variables in the package manifest
 CC = gcc
 CFLAGS = -Wall -I/usr/include/modbus
-LIBS=-lmodbus -lmosquitto
+LIBS=-lmodbus -lmosquitto -lconfig
  
 # This variable identifies all header files in the directory; we use it to create a dependency chain between the object files and the source files
 # This approach will re-build your application whenever any header file changes. In a more complex application, such behavior is often undesirable

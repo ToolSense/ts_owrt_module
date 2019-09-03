@@ -3,11 +3,11 @@ include $(TOPDIR)/rules.mk
 # Name, version and release number
 # The name and version of your package are used to define the variable to point to the build directory of your package: $(PKG_BUILD_DIR)
 PKG_NAME:=ts_owrt_module
-PKG_VERSION:=0.0.2
+PKG_VERSION:=0.0.3
 
 TARGET_CFLAGS=-I$(STAGING_DIR)/usr/include/modbus
 TARGET_LDFLAGS=-L$(STAGING_DIR)/usr/include/modbus
-PKG_BUILD_DEPENDS:=libmodbus libopenssl
+PKG_BUILD_DEPENDS:=libmodbus libopenssl libconfig
 
 # Source settings (i.e. where to find the source codes)
 # This is a custom variable, used below
@@ -20,7 +20,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=ToolSensePackages
   TITLE:=ts_owrt_module
-  DEPENDS:=+libmodbus +libmosquitto
+  DEPENDS:=+libmodbus +libmosquitto +libconfig
 endef
 
 # Package description; a more verbose description on what our package does

@@ -8,6 +8,8 @@
 #include <signal.h>
 #include <stdbool.h>
 
+#include <libconfig.h>
+
 #include "mqtt_connect.h"
 
 // modbus_connect begin
@@ -16,9 +18,11 @@
 
 #define DELAY_SEND_TIME 5 //sec
 // #define PORT 10333
-#define PORT_SSL 20333
+// #define PORT_SSL 20333
 
 bool send_mqtt_1m = false;
+
+int timer_intr = DELAY_SEND_TIME;
 
 typedef struct DataStruct
 {
@@ -45,9 +49,9 @@ void timer_init()
 	sigaction(SIGALRM, &psa, NULL);
 
 
-	tv.it_interval.tv_sec = DELAY_SEND_TIME;
+	tv.it_interval.tv_sec = timer_intr;
 	tv.it_interval.tv_usec = 0;
-	tv.it_value.tv_sec = DELAY_SEND_TIME;
+	tv.it_value.tv_sec = timer_intr;
 	tv.it_value.tv_usec = 0;
 	setitimer(ITIMER_REAL, &tv, NULL);
 }
@@ -70,6 +74,42 @@ int send_data(t_data data)
 
 int main(int argc, char *argv[])
 {
+	
+	config_t cfg;
+	config_setting_t *mqtt_conf;
+
+	config_init(&cfg);
+
+	/* Read the file. If there is an error, report it and exit. */
+	if(! config_read_file(&cfg, "ts_module.cfg"))
+	{
+	fprintf(stderr, "%s:%d - %s\n", config_error_file(&cfg),
+	        config_error_line(&cfg), config_error_text(&cfg));
+	config_destroy(&cfg);
+	return(EXIT_FAILURE);
+	}
+
+	if(config_lookup_int(&cfg, "timer_intr", &timer_intr))
+		timer_intr = DELAY_SEND_TIME;
+
+
+	mqtt_conf = config_lookup(&cfg, "mqtt");
+	if(mqtt_conf != NULL)
+	{
+		int count = config_setting_length(mqtt_conf);
+		printf("mqtt_conf %d\n", count);
+		config_setting_t *mqtt_cloud = config_setting_get_elem(mqtt_conf, 0);
+
+		config_setting_lookup_string(mqtt_cloud, "host", &mqttSetting.host);
+		config_setting_lookup_string(mqtt_cloud, "login", &mqttSetting.login);
+		config_setting_lookup_string(mqtt_cloud, "passwd", &mqttSetting.passwd);
+		config_setting_lookup_string(mqtt_cloud, "ssl_crt", &mqttSetting.ssl_crt);
+		config_setting_lookup_int(mqtt_cloud, "port", &mqttSetting.port);
+	}
+
+
+
+
 	// modbus_connect begin
 	ModbusError           status;
 	ModbusClientsList     clientsList;
@@ -78,13 +118,18 @@ int main(int argc, char *argv[])
 
 	printf("\r\nMosquitto test SSL\r\n");
 
+	//Test cl arguments
+	// printf("argc=%d\n", argc);
+	// printf("argv[0]=%s\n", argv[0]);
+	//------
+
 	timer_init();
 
-	mqttSetting.host = "m15.cloudmqtt.com";
-	mqttSetting.port = PORT_SSL;
-	mqttSetting.login = "thmcoslv";
-	mqttSetting.passwd = "odUivT2WEIsW";
-	mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
+	// mqttSetting.host = "m15.cloudmqtt.com";
+	// mqttSetting.port = PORT_SSL;
+	// mqttSetting.login = "thmcoslv";
+	// mqttSetting.passwd = "odUivT2WEIsW";
+	// mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
 
 	// modbus_connect begin
 	clientsList.clientsCnt = 1;               // One client
