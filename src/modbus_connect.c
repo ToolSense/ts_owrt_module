@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
+#include <modbus.h>
 #include <stdbool.h>
 #include "modbus_connect.h"
 
@@ -28,71 +29,136 @@ void err_msg(const char *msg, const char *func, const int line)
 }
 */
 
-ModbusClientsList _clientsList;
+ModbusSettings _modbusSettings;
 
-ModbusError modbusInit(ModbusClientsList *pClientsList)
+/**
+ * Read settings from file to _modbusSettings
+ *
+ * @param  pSettingsFileName .ini file name "/tmp/settings.ini"
+ * @return true - init ok, false - init fail
+ */
+bool modbusInitSettings(config_t cfg)
+{
+	int i;
+	const char       *pIpBuff;
+	config_setting_t *modbusConf;
+	config_setting_t *modbusClient;
+
+	modbusConf = config_lookup(&cfg, "modbus");
+
+	if(modbusConf == NULL)
+	{
+		fprintf(stdout, "modbusInitSettings: ERROR: No modbus settings\n");
+		return false;
+	}
+
+	_modbusSettings.clientsCnt = config_setting_length(modbusConf);
+
+	if(_modbusSettings.clientsCnt == 0)
+	{
+		fprintf(stdout, "modbusInitSettings: ERROR: No modbus clients in settings file\n");
+		return false;
+	}
+
+	if(_modbusSettings.clientsCnt > MAX_CLIENT_NUM)
+	{
+		fprintf(stdout, "modbusInitSettings: ERROR: too many clients, got %d, max %d\n",
+			    _modbusSettings.clientsCnt, 
+			    MAX_CLIENT_NUM);
+
+		return false;
+	}
+
+	// Init all clients
+	for(i = 0; i < _modbusSettings.clientsCnt; i++)
+	{
+		modbusClient = config_setting_get_elem(modbusConf, i);
+
+		config_setting_lookup_int(modbusClient, "id", &_modbusSettings.clients[i].id);
+		config_setting_lookup_int(modbusClient, "port", &_modbusSettings.clients[i].port);
+		config_setting_lookup_int(modbusClient, "offset", &_modbusSettings.clients[i].offset);
+		config_setting_lookup_int(modbusClient, "bytesToRead", &_modbusSettings.clients[i].bytesToRead);
+		config_setting_lookup_string(modbusClient, "ipAdress", &pIpBuff);
+
+		snprintf(_modbusSettings.clients[i].ipAdress, IP_BUF_SIZE, "%s", pIpBuff);
+	}
+
+	return true;
+}
+
+/**
+ * Init modbus connection
+ *
+ * @param  pSettingsFileName .ini file name "/tmp/settings.ini"
+ * @return MBE_OK - init ok, else - error
+ */
+ModbusError modbusInit(config_t cfg)
 {
 	int  clientNum;
 	bool atLeastOne = false;
 	ModbusError mbStatus = MBE_OK;
 
-	if(pClientsList->clientsCnt == 0)
+	// Get settings from file to _modbusSettings
+	if(!modbusInitSettings(cfg))
 	{
-		fprintf(stderr, "ERROR: No clients");
+		fprintf(stderr, "modbusInit: ERROR: Can't init\n");
+		return MBE_INIT;
+	}	
+
+	if(_modbusSettings.clientsCnt == 0)
+	{
+		fprintf(stderr, "modbusInit: ERROR: No clients\n");
 		return MBE_CLIENT;
 	}
-	else if(pClientsList->clientsCnt > MAX_CLIENT_NUM)
+	else if(_modbusSettings.clientsCnt > MAX_CLIENT_NUM)
 	{
-		fprintf(stderr, "ERROR: Too much clients, max  %d\n", MAX_CLIENT_NUM);
+		fprintf(stderr, "modbusInit: ERROR: Too much clients, max  %d\n", MAX_CLIENT_NUM);
 		return MBE_CLIENT;
 	}
 
 	if(MODBUS_DEBUG)
-		printf("Find %d clients\n", pClientsList->clientsCnt);
+		printf("Find %d clients\n", _modbusSettings.clientsCnt);
 
-	// Save clients data in _clientsList
-	memcpy(&_clientsList, pClientsList, sizeof(ModbusClientsList));
-
-	// Use _clientsList for connection
-	for(clientNum = 0; clientNum < _clientsList.clientsCnt; clientNum++)
+	// Use _modbusSettings for connection
+	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
 	{
 		// Default value
-		_clientsList.clients[clientNum].context   = NULL;
-		_clientsList.clients[clientNum].connected = false;
+		_modbusSettings.clients[clientNum].context   = NULL;
+		_modbusSettings.clients[clientNum].connected = false;
 
 		// Get context
-		_clientsList.clients[clientNum].context = modbus_new_tcp(_clientsList.clients[clientNum].ipAdress, 
-																 _clientsList.clients[clientNum].port);	
+		_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
+																    _modbusSettings.clients[clientNum].port);	
 		
-		if (_clientsList.clients[clientNum].context == NULL) 
+		if (_modbusSettings.clients[clientNum].context == NULL) 
 		{
-			fprintf(stderr, "ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
-					_clientsList.clients[clientNum].ipAdress,
-					_clientsList.clients[clientNum].port);
+			fprintf(stderr, "modbusInit: ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
+					_modbusSettings.clients[clientNum].ipAdress,
+					_modbusSettings.clients[clientNum].port);
 
 			return MBE_CONTEXT;
 		}
 		
 		// Connect
-		if (modbus_connect(_clientsList.clients[clientNum].context) == -1) 
+		if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 		{
-			fprintf(stderr, "ERROR: Connection failed: %s, for ip: %s, port: %d\n", modbus_strerror(errno),
-					_clientsList.clients[clientNum].ipAdress,
-					_clientsList.clients[clientNum].port);
+			fprintf(stderr, "modbusInit: ERROR: Connection failed: %s, for ip: %s, port: %d\n", modbus_strerror(errno),
+					_modbusSettings.clients[clientNum].ipAdress,
+					_modbusSettings.clients[clientNum].port);
 
 			mbStatus = MBE_FAIL;
 			continue;
 		}
 
-		modbus_set_slave(_clientsList.clients[clientNum].context, _clientsList.clients[clientNum].id);
+		modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);
 
-		_clientsList.clients[clientNum].connected = true;
+		_modbusSettings.clients[clientNum].connected = true;
 		atLeastOne = true;
 
 		if(MODBUS_DEBUG)
 			printf("Connected to ip: %s, port: %d\n", 
-					_clientsList.clients[clientNum].ipAdress,
-					_clientsList.clients[clientNum].port);
+					_modbusSettings.clients[clientNum].ipAdress,
+					_modbusSettings.clients[clientNum].port);
 	}
 
 	// Check status
@@ -107,6 +173,12 @@ ModbusError modbusInit(ModbusClientsList *pClientsList)
 	return MBE_OK;
 }
 
+/**
+ * Receive data from all clients
+ *
+ * @param  pDataList struct for result
+ * @return MBE_OK - init ok, else - error
+ */
 ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 {
 	int rc;
@@ -116,24 +188,24 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 
 	memset(pDataList, '\0', sizeof(ModbusClientsDataList));
 
-	for(clientNum = 0; clientNum < _clientsList.clientsCnt; clientNum++)
+	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
 	{
-		if(_clientsList.clients[clientNum].connected)
+		if(_modbusSettings.clients[clientNum].connected)
 		{
-			pDataList->clients[clientNum].clientId = _clientsList.clients[clientNum].id;
+			pDataList->clients[clientNum].clientId = _modbusSettings.clients[clientNum].id;
 
-			rc = modbus_read_registers(_clientsList.clients[clientNum].context, 
-									   _clientsList.clients[clientNum].offset, 
-									   _clientsList.clients[clientNum].numOfBytes, 
+			rc = modbus_read_registers(_modbusSettings.clients[clientNum].context, 
+									   _modbusSettings.clients[clientNum].offset, 
+									   _modbusSettings.clients[clientNum].bytesToRead, 
 									   pDataList->clients[clientNum].data);
 
 			if (rc == -1) 
 			{
-				fprintf(stderr, "ERROR: Recive data: %s, from ip: %s, port: %d\n", modbus_strerror(errno), 
-					    _clientsList.clients[clientNum].ipAdress, 
-					    _clientsList.clients[clientNum].port);
+				fprintf(stderr, "modbusReceiveData: ERROR: Recive data: %s, from ip: %s, port: %d\n", modbus_strerror(errno), 
+					    _modbusSettings.clients[clientNum].ipAdress, 
+					    _modbusSettings.clients[clientNum].port);
 
-				_clientsList.clients[clientNum].connected = false;
+				_modbusSettings.clients[clientNum].connected = false;
 				mbStatus = MBE_FAIL;
 				continue;	
 			}
@@ -143,8 +215,8 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 		else
 		{
 			fprintf(stderr, "ERROR: Not connected client ip: %s, port: %d, need reconnect\n", 
-					_clientsList.clients[clientNum].ipAdress, 
-					_clientsList.clients[clientNum].port);
+					_modbusSettings.clients[clientNum].ipAdress, 
+					_modbusSettings.clients[clientNum].port);
 
 				
 			mbStatus = MBE_FAIL;			
@@ -163,59 +235,63 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 	return MBE_OK;
 }
 
+/**
+ * Close and open all connections
+ *
+ * @return MBE_OK - init ok, else - error
+ */
+
 ModbusError modbusReconnect()
 {
 	int  clientNum;
 	bool atLeastOne = false;
 	ModbusError mbStatus = MBE_OK;
-	int rc;
-	uint16_t data[MAX_RCV_DATA_LEN];
 
-	for(clientNum = 0; clientNum < _clientsList.clientsCnt; clientNum++)
+	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
 	{
-		if(_clientsList.clients[clientNum].connected == false)
+		if(_modbusSettings.clients[clientNum].connected == false)
 		{	
 			// Client not connected
-			if(_clientsList.clients[clientNum].context != NULL)	
+			if(_modbusSettings.clients[clientNum].context != NULL)	
 			{
-				// modbus_close(_clientsList.clients[clientNum].context); Segmentation fault
-				// modbus_free(_clientsList.clients[clientNum].context);  Segmentation fault
+				// modbus_close(_modbusSettings.clients[clientNum].context); // svv Segmentation fault
+				// modbus_free(_modbusSettings.clients[clientNum].context);  // svv Segmentation fault
 
 				// Get context
-				_clientsList.clients[clientNum].context = modbus_new_tcp(_clientsList.clients[clientNum].ipAdress, 
-																			 _clientsList.clients[clientNum].port);	
+				_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
+																			 _modbusSettings.clients[clientNum].port);	
 				
-				if (_clientsList.clients[clientNum].context == NULL) 
+				if (_modbusSettings.clients[clientNum].context == NULL) 
 				{
 					fprintf(stderr, "ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
-							_clientsList.clients[clientNum].ipAdress,
-							_clientsList.clients[clientNum].port);
+							_modbusSettings.clients[clientNum].ipAdress,
+							_modbusSettings.clients[clientNum].port);
 
 					return MBE_CONTEXT;
 				}
  
 				// Connect
-				if (modbus_connect(_clientsList.clients[clientNum].context) == -1) 
+				if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 				{
 					fprintf(stderr, "ERROR: Connection failed: %s, for ip: %s, port: %d\n", modbus_strerror(errno),
-							_clientsList.clients[clientNum].ipAdress,
-							_clientsList.clients[clientNum].port);
+							_modbusSettings.clients[clientNum].ipAdress,
+							_modbusSettings.clients[clientNum].port);
 
 					mbStatus = MBE_FAIL;
 					continue;
 				}
 
-				modbus_set_slave(_clientsList.clients[clientNum].context, _clientsList.clients[clientNum].id);	
+				modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);	
 
-				_clientsList.clients[clientNum].connected = true;
+				_modbusSettings.clients[clientNum].connected = true;
 			}
 			else
 			{
 				fprintf(stderr, "ERROR: No context, need reinit, client ip: %s, port: %d\n", 
-					    _clientsList.clients[clientNum].ipAdress, 
-					    _clientsList.clients[clientNum].port);
+					    _modbusSettings.clients[clientNum].ipAdress, 
+					    _modbusSettings.clients[clientNum].port);
 
-				return MBE_REINIT;
+				return MBE_INIT;
 			}
 
 		}
@@ -233,16 +309,20 @@ ModbusError modbusReconnect()
 	return MBE_OK;	
 }
 
+/**
+ * Close all connections and deinit all clients 
+ *
+ */
 void modbusDeinit()
 {
 	int  clientNum;
 
-	for(clientNum = 0; clientNum < _clientsList.clientsCnt; clientNum++)
+	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
 	{
-		if(_clientsList.clients[clientNum].context != NULL)	
+		if(_modbusSettings.clients[clientNum].context != NULL)	
 		{
-			modbus_close(_clientsList.clients[clientNum].context);	
-			modbus_free(_clientsList.clients[clientNum].context);
+			modbus_close(_modbusSettings.clients[clientNum].context);	
+			modbus_free(_modbusSettings.clients[clientNum].context);
 		}
 	}
 }
