@@ -100,10 +100,10 @@ int main(int argc, char *argv[])
 		printf("mqtt_conf %d\n", count);
 		config_setting_t *mqtt_cloud = config_setting_get_elem(mqtt_conf, 0);
 
-		config_setting_lookup_string(mqtt_cloud, "host", &mqttSetting.host);
-		config_setting_lookup_string(mqtt_cloud, "login", &mqttSetting.login);
-		config_setting_lookup_string(mqtt_cloud, "passwd", &mqttSetting.passwd);
-		config_setting_lookup_string(mqtt_cloud, "ssl_crt", &mqttSetting.ssl_crt);
+		config_setting_lookup_string(mqtt_cloud, "host", (const char**)&mqttSetting.host);
+		config_setting_lookup_string(mqtt_cloud, "login", (const char**)&mqttSetting.login);
+		config_setting_lookup_string(mqtt_cloud, "passwd", (const char**)&mqttSetting.passwd);
+		config_setting_lookup_string(mqtt_cloud, "ssl_crt", (const char**)&mqttSetting.ssl_crt);
 		config_setting_lookup_int(mqtt_cloud, "port", &mqttSetting.port);
 	}
 
@@ -112,7 +112,6 @@ int main(int argc, char *argv[])
 
 	// modbus_connect begin
 	ModbusError           status;
-	ModbusClientsList     clientsList;
 	ModbusClientsDataList clientsDataList;
 	// modbus_connect end
 
@@ -132,14 +131,7 @@ int main(int argc, char *argv[])
 	// mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
 
 	// modbus_connect begin
-	clientsList.clientsCnt = 1;               // One client
-	clientsList.clients[0].id = 1;            // Client id
-	clientsList.clients[0].port = 502;        // Port
-	clientsList.clients[0].offset = 0;        // Bytes offset
-	clientsList.clients[0].numOfBytes = 1;    // Bytes num
-	snprintf(clientsList.clients[0].ipAdress, IP_BUF_SIZE, "%s", "192.168.1.9"); // Ip
-
-	status = modbusInit(&clientsList);
+	status = modbusInit(cfg);
 
 	if(status == MBE_OK)
 	{

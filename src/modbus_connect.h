@@ -9,51 +9,68 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <modbus.h>
+#include <libconfig.h>
 
-#define IP_BUF_SIZE    16
-#define MAX_CLIENT_NUM 10
-#define MAX_RCV_DATA_LEN 10
+#define IP_BUF_SIZE            16  // Ip adress buf "192.168.111.222"
+#define MAX_CLIENT_NUM         10  // Max numbers of client, min 1 - max 128 
+#define MAX_RCV_DATA_LEN       10  // Max numbers of byts to recive from client
+#define MAX_SECTION_NAME_LEN   16  // Max len for ini section len
 
+/**
+ * Error code
+ */
 typedef enum
 {
-	MBE_OK,
-	MBE_NOT_ALL,
-	MBE_CLIENT,
-	MBE_CONTEXT,
-	MBE_CONNECT,
-	MBE_REINIT,
-	MBE_FAIL
+	MBE_OK,			// Ok
+	MBE_NOT_ALL,	// Not all clients, but at least one
+	MBE_CLIENT,		// Client error
+	MBE_CONTEXT,	// TCP Context error
+	MBE_CONNECT, 	// Connection error
+	MBE_INIT,		// Init error, need reinit
+	MBE_FAIL		// Unknown error
 } ModbusError;
 
+/**
+ * Client info
+ */
 typedef struct
 {
-	int  id;
-	int  port;
-	int  offset;
-	int  numOfBytes;
-	bool connected;
-	char ipAdress[IP_BUF_SIZE+1];
-	modbus_t *context;
+	int  id;								 // Client Id 1-128
+	int  port;								 // TCP Port
+	int  offset;							 // Data offset (see modbus protocol)
+	int  bytesToRead;						 // Number of bytes to read from client
+	bool connected;							 // Connected sign, changed automatically
+	char ipAdress[IP_BUF_SIZE+1];			 // TCP Adress
+	modbus_t *context;						 // Modbus handler
 } ModbusClient;
 
+/**
+ * All clients settings
+ */
 typedef struct
 {
-	int clientsCnt;
-	ModbusClient clients[MAX_CLIENT_NUM];
-} ModbusClientsList;
+	int          clientsCnt;				 // Number of clients
+	ModbusClient clients[MAX_CLIENT_NUM];	 // Settings for all clients
+} ModbusSettings;
 
+/**
+ * Data from one client
+ */
 typedef struct
 {
-	int clientId;
-	uint16_t data[MAX_RCV_DATA_LEN];
+	int clientId;							 // Client Id
+	uint16_t data[MAX_RCV_DATA_LEN];		 // Received data
 } ModbusClientData;
 
+/**
+ * Data from all clients
+ */
 typedef struct
 {
-	ModbusClientData clients[MAX_CLIENT_NUM];
+	ModbusClientData clients[MAX_CLIENT_NUM]; // All received data
 } ModbusClientsDataList;
 
-ModbusError modbusInit(ModbusClientsList *pClientsList);
+ModbusError modbusInit(config_t cfg);
 ModbusError modbusReceiveData(ModbusClientsDataList *pDataList);
 ModbusError modbusReconnect();
 void        modbusDeinit();
