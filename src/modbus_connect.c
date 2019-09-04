@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
-#include <modbus.h>
 #include <stdbool.h>
 #include "modbus_connect.h"
 
