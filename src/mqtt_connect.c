@@ -1,18 +1,38 @@
 #include <stdio.h>
 #include <string.h>
 #include <mosquitto.h>
-
-
 #include "mqtt_connect.h"
 
 struct mosquitto *mosq = NULL;
 
-int mqtt_init(struct mqttServerSetting mqttSetting)
+int mqtt_init(config_t cfg)
 {
 	int keepalive = 60;
 	bool clean_session = true;
-
+	struct mqttServerSetting mqttSetting;
 	int rc = 0;
+
+	config_setting_t *mqtt_conf;
+
+	mqtt_conf = config_lookup(&cfg, "mqtt");
+	if(mqtt_conf != NULL)
+	{
+		int count = config_setting_length(mqtt_conf);
+		printf("mqtt_conf %d\n", count);
+		config_setting_t *mqtt_cloud = config_setting_get_elem(mqtt_conf, 0);
+
+		// mqttSetting.host = "m15.cloudmqtt.com";
+		// mqttSetting.port = PORT_SSL;
+		// mqttSetting.login = "thmcoslv";
+		// mqttSetting.passwd = "odUivT2WEIsW";
+		// mqttSetting.ssl_crt = "/etc/ssl/certs/ca-certificates.crt";
+
+		config_setting_lookup_string(mqtt_cloud, "host", (const char**)&mqttSetting.host);
+		config_setting_lookup_string(mqtt_cloud, "login", (const char**)&mqttSetting.login);
+		config_setting_lookup_string(mqtt_cloud, "passwd", (const char**)&mqttSetting.passwd);
+		config_setting_lookup_string(mqtt_cloud, "ssl_crt", (const char**)&mqttSetting.ssl_crt);
+		config_setting_lookup_int(mqtt_cloud, "port", &mqttSetting.port);
+	}
 
 	mosquitto_lib_init();
 

@@ -1,3 +1,4 @@
+#include <libconfig.h>
 
 struct mqttServerSetting
 {
@@ -8,5 +9,5 @@ struct mqttServerSetting
 	char *ssl_crt; //crt certificate file
 };
 
-int mqtt_init(struct mqttServerSetting mqttSetting);
+int mqtt_init(config_t cfg);
 int mqtt_send(char *msg, char *topic);

@@ -1,2 +1,3 @@
-.src/ts_owrt_module
+src/ts_owrt_module
+bin/
 *.o
