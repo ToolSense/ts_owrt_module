@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 # Name, version and release number
 # The name and version of your package are used to define the variable to point to the build directory of your package: $(PKG_BUILD_DIR)
 PKG_NAME:=ts_owrt_module
-PKG_VERSION:=0.0.4
+PKG_VERSION:=0.0.2
 
 TARGET_CFLAGS=-I$(STAGING_DIR)/usr/include/modbus
 TARGET_LDFLAGS=-L$(STAGING_DIR)/usr/include/modbus
@@ -46,6 +46,7 @@ endef
 
 # Package install instructions; create a directory inside the package to hold our executable, and then copy the executable we built previously into the folder
 define Package/$(PKG_NAME)/install
+	$(CP) ./files/* $(1)/
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME) $(1)/usr/bin
 endef

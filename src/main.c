@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
 {
 	printf("\r\nMosquitto test SSL\r\n");
 
-	char *cfg_file = "/tmp/ts_module.cfg";
+	char *cfg_file = "/etc/ts_module/ts_module.cfg";
 	if (argc > 1) cfg_file = argv[1];
 
 	//Test cl arguments
