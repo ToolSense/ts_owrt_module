@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include "modbus_connect.h"
 
 #define MODBUS_DEBUG 1
@@ -39,7 +40,6 @@ ModbusSettings _modbusSettings;
 bool modbusInitSettings(config_t cfg)
 {
 	int i;
-	const char       *pIpBuff;
 	config_setting_t *modbusConf;
 	config_setting_t *modbusClient;
 
@@ -76,13 +76,149 @@ bool modbusInitSettings(config_t cfg)
 		config_setting_lookup_int(modbusClient, "id", &_modbusSettings.clients[i].id);
 		config_setting_lookup_int(modbusClient, "port", &_modbusSettings.clients[i].port);
 		config_setting_lookup_int(modbusClient, "offset", &_modbusSettings.clients[i].offset);
-		config_setting_lookup_int(modbusClient, "bytesToRead", &_modbusSettings.clients[i].bytesToRead);
-		config_setting_lookup_string(modbusClient, "ipAdress", &pIpBuff);
+		config_setting_lookup_int(modbusClient, "refreshRateMs", &_modbusSettings.clients[i].refreshRateMs);
+		config_setting_lookup_int(modbusClient, "dataType", (int *)(&_modbusSettings.clients[i].dataType));
+		config_setting_lookup_string(modbusClient, "unit", &_modbusSettings.clients[i].unit);
+		config_setting_lookup_string(modbusClient, "ipAdress", &_modbusSettings.clients[i].ipAdress);
+		config_setting_lookup_string(modbusClient, "name", &_modbusSettings.clients[i].name);
 
-		snprintf(_modbusSettings.clients[i].ipAdress, IP_BUF_SIZE, "%s", pIpBuff);
+		// Bytes to read
+		config_setting_lookup_int(modbusClient, "bytesToRead", &_modbusSettings.clients[i].bytesToRead);
+
+		switch(_modbusSettings.clients[i].dataType)
+		{
+			case MDT_BOOL:
+				_modbusSettings.clients[i].bytesToRead = 1;
+				break;
+
+			case MDT_INT:
+				_modbusSettings.clients[i].bytesToRead = 4;
+				if(_modbusSettings.clients[i].bytesToRead > sizeof(int))
+				{
+					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'int' set to %d, but int len is %d\n", 
+						_modbusSettings.clients[i].bytesToRead,
+						(int)sizeof(int));
+
+					_modbusSettings.clients[i].bytesToRead = sizeof(int);
+				}
+				break;
+
+			case MDT_DWORD:
+				_modbusSettings.clients[i].bytesToRead = 4;
+
+				if(_modbusSettings.clients[i].bytesToRead > sizeof(DWORD))
+				{
+					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'DWORD' set to %d, but DWORD len is %d\n", 
+						_modbusSettings.clients[i].bytesToRead,
+						(int)sizeof(DWORD));
+
+					_modbusSettings.clients[i].bytesToRead = sizeof(DWORD);
+				}
+				break;
+
+			case MDT_TIME:
+				_modbusSettings.clients[i].bytesToRead = 8;
+				if(_modbusSettings.clients[i].bytesToRead > sizeof(time_t))
+				{
+					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'time_t' set to %d, but time_t len is %d\n", 
+						    _modbusSettings.clients[i].bytesToRead,
+						    (int)sizeof(time_t));
+
+					_modbusSettings.clients[i].bytesToRead = sizeof(time_t);
+				}
+				break;
+
+			case MDT_ENUM:
+				_modbusSettings.clients[i].bytesToRead = 4;
+				if(_modbusSettings.clients[i].bytesToRead > sizeof(int))
+				{
+					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'enum (int)' set to %d, but int len is %d\n", 
+						    _modbusSettings.clients[i].bytesToRead,
+						    (int)sizeof(int));
+
+					_modbusSettings.clients[i].bytesToRead = sizeof(int);
+				}
+				break;
+
+			default:
+				fprintf(stderr, "modbusInitSettings: ERROR: Wrong data type: %d in client with ip: %s \n", 
+					    (int)_modbusSettings.clients[i].dataType, _modbusSettings.clients[i].ipAdress);
+				return false;
+		}
 	}
 
 	return true;
+}
+
+/**
+ * Fill type specific fields (data_int, data_dword ...) in ModbusClientData
+ *
+ * @param  pData pointer no client data
+ * @return true - ok, false - wrong type
+ */
+bool modbusFillDataType(ModbusClientData *pData, int bytesToRead)
+{
+		// Fill data according to type
+		switch(pData->dataType)
+		{
+			case MDT_BOOL:
+				pData->data_bool = pData->data[0] != '\0';
+				break;
+
+			case MDT_INT:
+				if(bytesToRead > sizeof(int))
+				{
+					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'int' set to %d, but int len is %d\n", 
+						    bytesToRead, (int)sizeof(int));
+
+					return false;
+				}
+
+				memcpy(&(pData->data_int), pData->data, bytesToRead);
+				break;
+
+			case MDT_DWORD:
+				if(bytesToRead > sizeof(DWORD))
+				{
+					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'int' set to %d, but int len is %d\n", 
+						    bytesToRead, (int)sizeof(DWORD));
+
+					return false;
+				}
+				
+				memcpy(&(pData->data_dword), pData->data, bytesToRead);
+				break;
+
+			case MDT_TIME:
+				if(bytesToRead > sizeof(time_t))
+				{
+					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'time_t' set to %d, but time_t len is %d\n", 
+						    bytesToRead, (int)sizeof(time_t));
+
+					return false;
+				}
+
+				memcpy(&(pData->data_time), pData->data, bytesToRead);
+				break;
+
+			case MDT_ENUM:
+				if(bytesToRead > sizeof(int))
+				{
+					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'enum (int)' set to %d, but int len is %d\n", 
+						    bytesToRead, (int)sizeof(int));
+
+					return false;
+				}
+
+				memcpy(&(pData->data_enum), pData->data, bytesToRead);
+				break;
+
+			default:
+				fprintf(stderr, "modbusFillDataType: ERROR: Wrong data type\n");
+				return false;
+		}
+
+		return true;
 }
 
 /**
@@ -128,7 +264,6 @@ ModbusError modbusInit(config_t cfg)
 		// Get context
 		_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
 																    _modbusSettings.clients[clientNum].port);	
-		
 		if (_modbusSettings.clients[clientNum].context == NULL) 
 		{
 			fprintf(stderr, "modbusInit: ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
@@ -191,7 +326,14 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 	{
 		if(_modbusSettings.clients[clientNum].connected)
 		{
-			pDataList->clients[clientNum].clientId = _modbusSettings.clients[clientNum].id;
+			pDataList->clients[clientNum].id = _modbusSettings.clients[clientNum].id;
+
+			// Copy all info
+			pDataList->clients[clientNum].id       = _modbusSettings.clients[clientNum].id;
+			pDataList->clients[clientNum].name     = _modbusSettings.clients[clientNum].name;
+			pDataList->clients[clientNum].unit     = _modbusSettings.clients[clientNum].unit;
+			pDataList->clients[clientNum].dataType = _modbusSettings.clients[clientNum].dataType;
+
 
 			rc = modbus_read_registers(_modbusSettings.clients[clientNum].context, 
 									   _modbusSettings.clients[clientNum].offset, 
@@ -207,6 +349,13 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 				_modbusSettings.clients[clientNum].connected = false;
 				mbStatus = MBE_FAIL;
 				continue;	
+			}
+
+			// Fill data according to type
+			if(!modbusFillDataType(&(pDataList->clients[clientNum]), _modbusSettings.clients[clientNum].bytesToRead))
+			{
+				fprintf(stderr, "ERROR: modbusReceiveData: Convert error\n");
+				return MBE_FAIL;
 			}
 
 			atLeastOne = true;
@@ -235,6 +384,80 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 }
 
 /**
+ * Receive data from one client
+ *
+ * @param  pDataList struct for result
+ * @return MBE_OK - init ok, else - error
+ */
+ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
+{
+	int  rc;
+	int  clientNum;
+	bool found = false;
+
+	memset(pData, '\0', sizeof(ModbusClientData));
+
+	// Search for client
+	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
+	{
+		if(_modbusSettings.clients[clientNum].id == id)
+		{
+			found = true;
+			break;
+		}
+	}
+
+	if(!found)
+	{
+		fprintf(stderr, "modbusReceiveDataId: ERROR: No client with id: %d\n", id);
+		return MBE_FAIL;
+	}
+
+	if(_modbusSettings.clients[clientNum].connected)
+	{
+		// Copy all info
+		pData->id       = _modbusSettings.clients[clientNum].id;
+		pData->name     = _modbusSettings.clients[clientNum].name;
+		pData->unit     = _modbusSettings.clients[clientNum].unit;
+		pData->dataType = _modbusSettings.clients[clientNum].dataType;
+
+		rc = modbus_read_registers(_modbusSettings.clients[clientNum].context, 
+								   _modbusSettings.clients[clientNum].offset, 
+								   _modbusSettings.clients[clientNum].bytesToRead, 
+								   pData->data);
+
+		if (rc == -1) 
+		{
+			fprintf(stderr, "modbusReceiveDataId: ERROR: Recive data: %s, from ip: %s, port: %d\n", modbus_strerror(errno), 
+				    _modbusSettings.clients[clientNum].ipAdress, 
+				    _modbusSettings.clients[clientNum].port);
+
+			_modbusSettings.clients[clientNum].connected = false;
+			return MBE_FAIL;	
+		}
+
+		// Fill data according to type
+		if(!modbusFillDataType(pData, _modbusSettings.clients[clientNum].bytesToRead))
+		{
+			fprintf(stderr, "ERROR: modbusReceiveDataId: Convert error\n");
+			return MBE_FAIL;
+		}
+
+	}
+	else
+	{
+		fprintf(stderr, "ERROR: Not connected client ip: %s, port: %d, need reconnect\n", 
+				_modbusSettings.clients[clientNum].ipAdress, 
+				_modbusSettings.clients[clientNum].port);
+
+			
+		return MBE_FAIL;			
+	}
+
+	return MBE_OK;
+}
+
+/**
  * Close and open all connections
  *
  * @return MBE_OK - init ok, else - error
@@ -253,10 +476,9 @@ ModbusError modbusReconnect()
 			// Client not connected
 			if(_modbusSettings.clients[clientNum].context != NULL)	
 			{
-				// modbus_close(_modbusSettings.clients[clientNum].context); // svv Segmentation fault
-				// modbus_free(_modbusSettings.clients[clientNum].context);  // svv Segmentation fault
-
-				// Get context
+				 // modbus_close(_modbusSettings.clients[clientNum].context); // svv Segmentation fault
+				 modbus_free(_modbusSettings.clients[clientNum].context);  // svv Segmentation fault
+			
 				_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
 																			 _modbusSettings.clients[clientNum].port);	
 				

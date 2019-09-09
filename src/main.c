@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
 			}
 			
 
-			printf("Id:%2d temp=%6d \t (0x%X)\n", clientsDataList.clients[0].clientId, 
+			printf("Id:%2d temp=%6d \t (0x%X)\n", clientsDataList.clients[0].id, 
 											  clientsDataList.clients[0].data[0], 
 											  clientsDataList.clients[0].data[0]);
 
