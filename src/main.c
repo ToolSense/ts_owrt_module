@@ -91,9 +91,11 @@ int main(int argc, char *argv[])
 
 	timer_init(cfg);
 
+	mqtt_init(cfg);
+
 	// modbus_connect begin
-	ModbusError           status;
-	ModbusClientsDataList clientsDataList;
+	ModbusError      status;
+	ModbusClientData clientData;
 
 	status = modbusInit(cfg);
 
@@ -108,11 +110,8 @@ int main(int argc, char *argv[])
 	else
 	{
 		fprintf(stdout, "Modbus: Init error\n");
-		modbusDeinit();
 	}
 	// modbus_connect end
-
-	mqtt_init(cfg);
 
 	while(1) {
 
@@ -120,29 +119,41 @@ int main(int argc, char *argv[])
 
 			// modbus_connect begin
 			// Receive data
-			status = modbusReceiveData(&clientsDataList);
+			status = modbusReceiveDataId(&clientData, 1);
 
 			if(status == MBE_OK)
 			{
 				fprintf(stdout, "Modbus: Receive OK\n");
-			}
-			else if(status == MBE_NOT_ALL)
-			{
-				fprintf(stdout, "Modbus: Not all clients send data\n");
-				modbusReconnect();
+
+
+				printf("Modbus data: Id: %d, name: %s, unit: %s, data: %02X:%02X:%02X:%02X \n", 
+					   clientData.id, clientData.name, clientData.unit, 
+					   clientData.data[0], clientData.data[1], clientData.data[2], clientData.data[3]);
+
+				if(clientData.dataType == MDT_INT)
+					printf("Int data: %d\n", clientData.data_int);
+				else if(clientData.dataType == MDT_BOOL)
+					printf("Bool data: %s\n", clientData.data_bool ? "true":"false");
+				else if(clientData.dataType == MDT_DWORD)
+					printf("Dword data: %d\n", clientData.data_dword);
+				else if(clientData.dataType == MDT_TIME)
+					printf("Time data: %s\n", ctime (&clientData.data_time));
+				else if(clientData.dataType == MDT_ENUM)
+					printf("Enum (int) data: %d\n", clientData.data_enum);
+				else
+					printf("Wrong data type: %d\n", (int)clientData.dataType);
+
+				// MQTT
+				if(clientData.dataType == MDT_INT)
+					data.temp = clientData.data_int;
+				else
+					data.temp = 25;
 			}
 			else
 			{
 				fprintf(stdout, "Modbus: Receive error\n");
 				modbusReconnect();
 			}
-			
-
-			printf("Id:%2d temp=%6d \t (0x%X)\n", clientsDataList.clients[0].id, 
-											  clientsDataList.clients[0].data[0], 
-											  clientsDataList.clients[0].data[0]);
-
-			data.temp = clientsDataList.clients[0].data[0];
 			// modbus_connect end
 
 			time(&data.time);

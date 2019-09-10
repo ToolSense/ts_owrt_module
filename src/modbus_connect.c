@@ -73,17 +73,15 @@ bool modbusInitSettings(config_t cfg)
 	{
 		modbusClient = config_setting_get_elem(modbusConf, i);
 
-		config_setting_lookup_int(modbusClient, "id", &_modbusSettings.clients[i].id);
-		config_setting_lookup_int(modbusClient, "port", &_modbusSettings.clients[i].port);
-		config_setting_lookup_int(modbusClient, "offset", &_modbusSettings.clients[i].offset);
-		config_setting_lookup_int(modbusClient, "refreshRateMs", &_modbusSettings.clients[i].refreshRateMs);
-		config_setting_lookup_int(modbusClient, "dataType", (int *)(&_modbusSettings.clients[i].dataType));
-		config_setting_lookup_string(modbusClient, "unit", &_modbusSettings.clients[i].unit);
-		config_setting_lookup_string(modbusClient, "ipAdress", &_modbusSettings.clients[i].ipAdress);
-		config_setting_lookup_string(modbusClient, "name", &_modbusSettings.clients[i].name);
+		config_setting_lookup_int(modbusClient,    "id",            &_modbusSettings.clients[i].id);
+		config_setting_lookup_int(modbusClient,    "port",          &_modbusSettings.clients[i].port);
+		config_setting_lookup_int(modbusClient,    "refreshRateMs", &_modbusSettings.clients[i].refreshRateMs);
+		config_setting_lookup_int(modbusClient,    "dataType",      (int *)(&_modbusSettings.clients[i].dataType));
+		config_setting_lookup_string(modbusClient, "unit",          &_modbusSettings.clients[i].unit);
+		config_setting_lookup_string(modbusClient, "ipAdress",      &_modbusSettings.clients[i].ipAdress);
+		config_setting_lookup_string(modbusClient, "name",          &_modbusSettings.clients[i].name);
 
-		// Bytes to read
-		config_setting_lookup_int(modbusClient, "bytesToRead", &_modbusSettings.clients[i].bytesToRead);
+		_modbusSettings.clients[i].offset = 0; // Default for all clients
 
 		switch(_modbusSettings.clients[i].dataType)
 		{
@@ -433,7 +431,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 				    _modbusSettings.clients[clientNum].port);
 
 			_modbusSettings.clients[clientNum].connected = false;
-			return MBE_FAIL;	
+			return MBE_CONNECT;	
 		}
 
 		// Fill data according to type
@@ -476,21 +474,6 @@ ModbusError modbusReconnect()
 			// Client not connected
 			if(_modbusSettings.clients[clientNum].context != NULL)	
 			{
-				 // modbus_close(_modbusSettings.clients[clientNum].context); // svv Segmentation fault
-				 modbus_free(_modbusSettings.clients[clientNum].context);  // svv Segmentation fault
-			
-				_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
-																			 _modbusSettings.clients[clientNum].port);	
-				
-				if (_modbusSettings.clients[clientNum].context == NULL) 
-				{
-					fprintf(stderr, "ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
-							_modbusSettings.clients[clientNum].ipAdress,
-							_modbusSettings.clients[clientNum].port);
-
-					return MBE_CONTEXT;
-				}
- 
 				// Connect
 				if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 				{

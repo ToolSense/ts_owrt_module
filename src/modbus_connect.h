@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <modbus.h>
+#include <modbus.h> 
 #include <libconfig.h>
 
 #define IP_BUF_SIZE            16  // Ip adress buf "192.168.111.222"
@@ -98,6 +98,7 @@ typedef struct
 
 ModbusError modbusInit(config_t cfg);
 ModbusError modbusReceiveData(ModbusClientsDataList *pDataList);
+ModbusError modbusReceiveDataId(ModbusClientData *pData, int id);
 ModbusError modbusReconnect();
 void        modbusDeinit();
 
