@@ -10,18 +10,10 @@
 #include <libconfig.h>
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
-
-#define DELAY_SEND_TIME 5 //sec
+#include "ts_data.h"
+#include "ts_module_const.h"
 
 bool send_mqtt_1m = false;
-
-typedef struct DataStruct
-{
-	int temp;
-	time_t time;
-} t_data;
-
-t_data data;
 
 void timer_handler_1m()
 {
@@ -49,14 +41,14 @@ void timer_init(config_t cfg)
 	setitimer(ITIMER_REAL, &tv, NULL);
 }
 
-int send_data(t_data data)
+int send_data(t_data data[], int count)
 {
-	char *buf = malloc(64);
+	char *buf = malloc(MAX_BUF);
 	// sprintf(buf,"\nUnix time: %d",data.time);
 	// int rc = mqtt_send(buf, "temp");
 
 	//Temporary solution
-	sprintf (buf, "{\"temp\": %d, \"time\": %ld}", data.temp, data.time);
+	get_json(buf, data, count);
 	printf("%s\n", buf);
 
 
@@ -88,6 +80,12 @@ int main(int argc, char *argv[])
 		config_destroy(&cfg);
 		return(EXIT_FAILURE);
 	}
+
+
+	int count_data = 0;
+	init_count(&count_data, cfg);
+	t_data data[count_data];
+	init_data(data, cfg);
 
 	timer_init(cfg);
 
@@ -145,9 +143,9 @@ int main(int argc, char *argv[])
 
 				// MQTT
 				if(clientData.dataType == MDT_INT)
-					data.temp = clientData.data_int;
+					data[TEMP].i_data = clientData.data_int;
 				else
-					data.temp = 25;
+					data[TEMP].i_data = 25;
 			}
 			else
 			{
@@ -156,10 +154,10 @@ int main(int argc, char *argv[])
 			}
 			// modbus_connect end
 
-			time(&data.time);
+			time(&data[TIME].l_data);
 
 			// mqtt_send("Test\n", "temp");
-			send_data(data);
+			send_data(data, count_data);
 			send_mqtt_1m = false;
 		}
 
