@@ -86,56 +86,23 @@ bool modbusInitSettings(config_t cfg)
 		switch(_modbusSettings.clients[i].dataType)
 		{
 			case MDT_BOOL:
-				_modbusSettings.clients[i].bytesToRead = 1;
+				_modbusSettings.clients[i].registersToRead = 1;
 				break;
 
 			case MDT_INT:
-				_modbusSettings.clients[i].bytesToRead = 4;
-				if(_modbusSettings.clients[i].bytesToRead > sizeof(int))
-				{
-					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'int' set to %d, but int len is %d\n", 
-						_modbusSettings.clients[i].bytesToRead,
-						(int)sizeof(int));
-
-					_modbusSettings.clients[i].bytesToRead = sizeof(int);
-				}
+				_modbusSettings.clients[i].registersToRead = 2;
 				break;
 
 			case MDT_DWORD:
-				_modbusSettings.clients[i].bytesToRead = 4;
-
-				if(_modbusSettings.clients[i].bytesToRead > sizeof(DWORD))
-				{
-					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'DWORD' set to %d, but DWORD len is %d\n", 
-						_modbusSettings.clients[i].bytesToRead,
-						(int)sizeof(DWORD));
-
-					_modbusSettings.clients[i].bytesToRead = sizeof(DWORD);
-				}
+				_modbusSettings.clients[i].registersToRead = 4;
 				break;
 
 			case MDT_TIME:
-				_modbusSettings.clients[i].bytesToRead = 8;
-				if(_modbusSettings.clients[i].bytesToRead > sizeof(time_t))
-				{
-					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'time_t' set to %d, but time_t len is %d\n", 
-						    _modbusSettings.clients[i].bytesToRead,
-						    (int)sizeof(time_t));
-
-					_modbusSettings.clients[i].bytesToRead = sizeof(time_t);
-				}
+				_modbusSettings.clients[i].registersToRead = 4;
 				break;
 
 			case MDT_ENUM:
-				_modbusSettings.clients[i].bytesToRead = 4;
-				if(_modbusSettings.clients[i].bytesToRead > sizeof(int))
-				{
-					fprintf(stderr, "modbusInitSettings: ERROR: data type len 'enum (int)' set to %d, but int len is %d\n", 
-						    _modbusSettings.clients[i].bytesToRead,
-						    (int)sizeof(int));
-
-					_modbusSettings.clients[i].bytesToRead = sizeof(int);
-				}
+				_modbusSettings.clients[i].registersToRead = 4;
 				break;
 
 			default:
@@ -154,61 +121,29 @@ bool modbusInitSettings(config_t cfg)
  * @param  pData pointer no client data
  * @return true - ok, false - wrong type
  */
-bool modbusFillDataType(ModbusClientData *pData, int bytesToRead)
+bool modbusFillDataType(ModbusClientData *pData)
 {
 		// Fill data according to type
 		switch(pData->dataType)
 		{
 			case MDT_BOOL:
-				pData->data_bool = pData->data[0] != '\0';
+				pData->data_bool = pData->data[0] != 0;
 				break;
 
 			case MDT_INT:
-				if(bytesToRead > sizeof(int))
-				{
-					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'int' set to %d, but int len is %d\n", 
-						    bytesToRead, (int)sizeof(int));
-
-					return false;
-				}
-
-				memcpy(&(pData->data_int), pData->data, bytesToRead);
+				memcpy(&(pData->data_int), pData->data, sizeof(int));
 				break;
 
 			case MDT_DWORD:
-				if(bytesToRead > sizeof(DWORD))
-				{
-					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'int' set to %d, but int len is %d\n", 
-						    bytesToRead, (int)sizeof(DWORD));
-
-					return false;
-				}
-				
-				memcpy(&(pData->data_dword), pData->data, bytesToRead);
+				memcpy(&(pData->data_dword), pData->data, sizeof(DWORD));
 				break;
 
 			case MDT_TIME:
-				if(bytesToRead > sizeof(time_t))
-				{
-					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'time_t' set to %d, but time_t len is %d\n", 
-						    bytesToRead, (int)sizeof(time_t));
-
-					return false;
-				}
-
-				memcpy(&(pData->data_time), pData->data, bytesToRead);
+				memcpy(&(pData->data_time), pData->data, sizeof(time_t));
 				break;
 
 			case MDT_ENUM:
-				if(bytesToRead > sizeof(int))
-				{
-					fprintf(stderr, "modbusFillDataType: ERROR: bytesToRead of 'enum (int)' set to %d, but int len is %d\n", 
-						    bytesToRead, (int)sizeof(int));
-
-					return false;
-				}
-
-				memcpy(&(pData->data_enum), pData->data, bytesToRead);
+				memcpy(&(pData->data_enum), pData->data, sizeof(int));
 				break;
 
 			default:
@@ -335,7 +270,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 
 			rc = modbus_read_registers(_modbusSettings.clients[clientNum].context, 
 									   _modbusSettings.clients[clientNum].offset, 
-									   _modbusSettings.clients[clientNum].bytesToRead, 
+									   _modbusSettings.clients[clientNum].registersToRead, 
 									   pDataList->clients[clientNum].data);
 
 			if (rc == -1) 
@@ -350,7 +285,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 			}
 
 			// Fill data according to type
-			if(!modbusFillDataType(&(pDataList->clients[clientNum]), _modbusSettings.clients[clientNum].bytesToRead))
+			if( !modbusFillDataType(&(pDataList->clients[clientNum])) )
 			{
 				fprintf(stderr, "ERROR: modbusReceiveData: Convert error\n");
 				return MBE_FAIL;
@@ -421,7 +356,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 
 		rc = modbus_read_registers(_modbusSettings.clients[clientNum].context, 
 								   _modbusSettings.clients[clientNum].offset, 
-								   _modbusSettings.clients[clientNum].bytesToRead, 
+								   _modbusSettings.clients[clientNum].registersToRead, 
 								   pData->data);
 
 		if (rc == -1) 
@@ -435,7 +370,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 		}
 
 		// Fill data according to type
-		if(!modbusFillDataType(pData, _modbusSettings.clients[clientNum].bytesToRead))
+		if(!modbusFillDataType(pData))
 		{
 			fprintf(stderr, "ERROR: modbusReceiveDataId: Convert error\n");
 			return MBE_FAIL;

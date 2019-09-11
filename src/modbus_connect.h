@@ -52,7 +52,7 @@ typedef struct
 	int  id;								 // Client Id 1-128
 	int  port;								 // TCP Port
 	int  offset;							 // Data offset (see modbus protocol)
-	int  bytesToRead;						 // Number of bytes to read from client
+	int  registersToRead;				     // Number of registers to read from client
 	int  refreshRateMs;						 // Time to refresh data		
 	bool connected;							 // Connected sign, changed automatically
 	const char *ipAdress;			 		 // TCP Adress
