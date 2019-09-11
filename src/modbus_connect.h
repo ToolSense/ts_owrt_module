@@ -8,13 +8,15 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdbool.h>
-#include <modbus.h>
+#include <modbus.h> 
 #include <libconfig.h>
 
 #define IP_BUF_SIZE            16  // Ip adress buf "192.168.111.222"
 #define MAX_CLIENT_NUM         10  // Max numbers of client, min 1 - max 128 
 #define MAX_RCV_DATA_LEN       10  // Max numbers of byts to recive from client
 #define MAX_SECTION_NAME_LEN   16  // Max len for ini section len
+
+typedef unsigned int DWORD;
 
 /**
  * Error code
@@ -31,6 +33,18 @@ typedef enum
 } ModbusError;
 
 /**
+ * Data type
+ */
+typedef enum
+{
+	MDT_BOOL  = 1,		// Boolean
+	MDT_INT   = 2,		// Integer
+	MDT_DWORD = 3,		// Double word
+	MDT_TIME  = 4,		// Time
+	MDT_ENUM  = 5		// Enumerate
+} ModbusDataType;
+
+/**
  * Client info
  */
 typedef struct
@@ -38,10 +52,14 @@ typedef struct
 	int  id;								 // Client Id 1-128
 	int  port;								 // TCP Port
 	int  offset;							 // Data offset (see modbus protocol)
-	int  bytesToRead;						 // Number of bytes to read from client
+	int  registersToRead;				     // Number of registers to read from client
+	int  refreshRateMs;						 // Time to refresh data		
 	bool connected;							 // Connected sign, changed automatically
-	char ipAdress[IP_BUF_SIZE+1];			 // TCP Adress
+	const char *ipAdress;			 		 // TCP Adress
+	const char *unit;			 		 	 // Unit (h, kg, cm, m/s ...)
+	const char *name;			 		 	 // Name(Data Point, Variable)
 	modbus_t *context;						 // Modbus handler
+	ModbusDataType dataType;                 // Type of receive data
 } ModbusClient;
 
 /**
@@ -58,8 +76,16 @@ typedef struct
  */
 typedef struct
 {
-	int clientId;							 // Client Id
+	int id;							         // Client Id
+	const char *name;			 		 	 // Name(Data Point, Variable)
+	const char *unit;			 		 	 // Unit (h, kg, cm, m/s ...)
+	ModbusDataType dataType;                 // Type of receive data
 	uint16_t data[MAX_RCV_DATA_LEN];		 // Received data
+	bool     data_bool;				     	 // Data in boolean format			
+	int      data_int;				     	 // Data in integer format
+	DWORD    data_dword;				 	 // Data in double word format
+	time_t   data_time;					 	 // Data in time_t format
+	int      data_enum;					 	 // Data in enumeration format
 } ModbusClientData;
 
 /**
@@ -72,6 +98,7 @@ typedef struct
 
 ModbusError modbusInit(config_t cfg);
 ModbusError modbusReceiveData(ModbusClientsDataList *pDataList);
+ModbusError modbusReceiveDataId(ModbusClientData *pData, int id);
 ModbusError modbusReconnect();
 void        modbusDeinit();
 
