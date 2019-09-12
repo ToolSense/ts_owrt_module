@@ -11,7 +11,6 @@
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
 #include "ts_data.h"
-#include "ts_module_const.h"
 
 bool send_mqtt_1m = false;
 
@@ -68,7 +67,7 @@ int main(int argc, char *argv[])
 	// printf("argc=%d\n", argc);
 	// printf("argv[0]=%s\n", argv[0]);	
 	//------
-	
+
 	config_t cfg;
 	config_init(&cfg);
 
