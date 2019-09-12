@@ -40,6 +40,7 @@ ModbusSettings _modbusSettings;
 bool modbusInitSettings(config_t cfg)
 {
 	int i;
+	const char       *pDataType;
 	config_setting_t *modbusConf;
 	config_setting_t *modbusClient;
 
@@ -76,40 +77,41 @@ bool modbusInitSettings(config_t cfg)
 		config_setting_lookup_int(modbusClient,    "id",            &_modbusSettings.clients[i].id);
 		config_setting_lookup_int(modbusClient,    "port",          &_modbusSettings.clients[i].port);
 		config_setting_lookup_int(modbusClient,    "refreshRateMs", &_modbusSettings.clients[i].refreshRateMs);
-		config_setting_lookup_int(modbusClient,    "dataType",      (int *)(&_modbusSettings.clients[i].dataType));
 		config_setting_lookup_string(modbusClient, "unit",          &_modbusSettings.clients[i].unit);
 		config_setting_lookup_string(modbusClient, "ipAdress",      &_modbusSettings.clients[i].ipAdress);
 		config_setting_lookup_string(modbusClient, "name",          &_modbusSettings.clients[i].name);
+		config_setting_lookup_string(modbusClient, "dataType",      &pDataType);
 
+		// Offset
 		_modbusSettings.clients[i].offset = 0; // Default for all clients
 
-		switch(_modbusSettings.clients[i].dataType)
-		{
-			case MDT_BOOL:
-				_modbusSettings.clients[i].registersToRead = 1;
-				break;
-
-			case MDT_INT:
-				_modbusSettings.clients[i].registersToRead = 2;
-				break;
-
-			case MDT_DWORD:
-				_modbusSettings.clients[i].registersToRead = 4;
-				break;
-
-			case MDT_TIME:
-				_modbusSettings.clients[i].registersToRead = 4;
-				break;
-
-			case MDT_ENUM:
-				_modbusSettings.clients[i].registersToRead = 4;
-				break;
-
-			default:
-				fprintf(stderr, "modbusInitSettings: ERROR: Wrong data type: %d in client with ip: %s \n", 
-					    (int)_modbusSettings.clients[i].dataType, _modbusSettings.clients[i].ipAdress);
-				return false;
+		// Parse data type
+		if (strcmp(pDataType, "int") == 0){
+			_modbusSettings.clients[i].dataType = MDT_INT;
+			_modbusSettings.clients[i].registersToRead = 2;
 		}
+		else if (strcmp(pDataType, "dword") == 0) {
+			_modbusSettings.clients[i].dataType = MDT_DWORD;
+			_modbusSettings.clients[i].registersToRead = 4;
+		}
+		else if (strcmp(pDataType, "bool") == 0) {
+			_modbusSettings.clients[i].dataType = MDT_BOOL;
+			_modbusSettings.clients[i].registersToRead = 1;	
+		}
+		else if (strcmp(pDataType, "time") == 0) {
+			_modbusSettings.clients[i].dataType = MDT_TIME;
+			_modbusSettings.clients[i].registersToRead = 4;	
+		}
+		else if (strcmp(pDataType, "enum") == 0) { 
+			_modbusSettings.clients[i].dataType = MDT_ENUM;
+			_modbusSettings.clients[i].registersToRead = 2;
+		}
+		else
+		{
+			fprintf(stderr, "modbusInitSettings: ERROR: Wrong data type: %s in client with ip: %s \n", 
+				    pDataType, _modbusSettings.clients[i].ipAdress);
+			return false;	
+		}				
 	}
 
 	return true;

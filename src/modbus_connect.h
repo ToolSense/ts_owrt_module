@@ -37,11 +37,11 @@ typedef enum
  */
 typedef enum
 {
-	MDT_BOOL  = 1,		// Boolean
-	MDT_INT   = 2,		// Integer
-	MDT_DWORD = 3,		// Double word
-	MDT_TIME  = 4,		// Time
-	MDT_ENUM  = 5		// Enumerate
+	MDT_BOOL,		// Boolean
+	MDT_INT,		// Integer
+	MDT_DWORD,		// Double word
+	MDT_TIME,		// Time
+	MDT_ENUM		// Enumerate
 } ModbusDataType;
 
 /**
