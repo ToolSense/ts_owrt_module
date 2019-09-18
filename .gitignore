@@ -1,3 +1,5 @@
 src/ts_owrt_module
 bin/
 *.o
+.cproject
+.project

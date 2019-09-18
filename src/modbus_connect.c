@@ -464,6 +464,7 @@ void modbusDeinit()
 		{
 			modbus_close(_modbusSettings.clients[clientNum].context);	
 			modbus_free(_modbusSettings.clients[clientNum].context);
+			_modbusSettings.clients[clientNum].context = NULL;
 		}
 	}
 }
