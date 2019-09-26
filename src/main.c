@@ -12,6 +12,7 @@
 #include "modbus_connect.h"
 #include "ts_data.h"
 #include "ts_module_const.h"
+#include "logger.h"
 
 bool send_mqtt_1m = false;
 
@@ -72,6 +73,9 @@ int main(int argc, char *argv[])
 	config_t cfg;
 	config_init(&cfg);
 
+	logger_set_log_file("/tmp/log.txt");
+	log_error("This message goes to logfile");
+
 	/* Read the file. If there is an error, report it and exit. */
 	if(! config_read_file(&cfg, cfg_file))
 	{
@@ -80,7 +84,6 @@ int main(int argc, char *argv[])
 		config_destroy(&cfg);
 		return(EXIT_FAILURE);
 	}
-
 
 	int count_data = 0;
 	init_count(&count_data, cfg);
