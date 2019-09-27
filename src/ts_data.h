@@ -12,7 +12,8 @@
 typedef struct DataStruct
 {
 	char *alias;
-	TSDataType type;
+	// TSDataType type;
+	int type;
 	bool b_data;
 	int i_data;
 	long int l_data;

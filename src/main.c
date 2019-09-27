@@ -11,33 +11,73 @@
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
 #include "ts_data.h"
+#include <syslog.h>
+
+typedef struct DeviceInitStatus
+{
+	bool mqtt;
+	bool modbus;
+} init_status;
+
+
 
 bool send_mqtt_1m = false;
+bool send_mqtt_1s = false;
+bool send_mqtt_100ms = false;
+
+int timer_counter = 0;
 
 void timer_handler_1m()
 {
 	send_mqtt_1m = true;
 }
 
+void timer_handler_100ms()
+{
+	send_mqtt_100ms = true;
+	timer_counter++;
+
+	if ((timer_counter % TIMER_1S) == 0) {
+		send_mqtt_1s = true;
+	}
+
+	// if ((timer_counter % TIMER_5S) == 0) {
+	// 	send_mqtt_1m = true;
+	// }
+
+	// Maximum period - TIMER_5S
+	if (timer_counter == TIMER_5S) {
+		send_mqtt_1m = true;
+		timer_counter = 0;
+	}
+}
+
 void timer_init(config_t cfg)
 {
 	struct sigaction psa;
 	struct itimerval tv;
-	int timer_intr = DELAY_SEND_TIME;
+	int timer_intr = 0;
 
-	if(config_lookup_int(&cfg, "timer_intr", &timer_intr))
+	if(!config_lookup_int(&cfg, "timer_intr", &timer_intr))
 		timer_intr = DELAY_SEND_TIME;
 
 	memset(&psa, 0, sizeof(psa));
-	psa.sa_handler = &timer_handler_1m;
+	psa.sa_handler = &timer_handler_100ms;
 	sigaction(SIGALRM, &psa, NULL);
 
+	// tv.it_interval.tv_sec = timer_intr;
+	// tv.it_interval.tv_usec = 0;
+	// tv.it_value.tv_sec = timer_intr;
+	// tv.it_value.tv_usec = 0;
 
-	tv.it_interval.tv_sec = timer_intr;
-	tv.it_interval.tv_usec = 0;
-	tv.it_value.tv_sec = timer_intr;
-	tv.it_value.tv_usec = 0;
+	tv.it_interval.tv_sec = 0;
+	tv.it_interval.tv_usec = timer_intr;
+	tv.it_value.tv_sec = 0;
+	tv.it_value.tv_usec = timer_intr;
+
+	// struct itimerval old, old2;
 	setitimer(ITIMER_REAL, &tv, NULL);
+	// setitimer(ITIMER_REAL, &tv2, &old2);
 }
 
 int send_data(t_data data[], int count)
@@ -52,6 +92,10 @@ int send_data(t_data data[], int count)
 
 
 	int rc = mqtt_send(buf, "temp");
+
+	#ifdef SYSLOG
+		syslog(LOG_INFO,"Send dada status %d", rc);
+	#endif
 		
 	return rc;
 }
@@ -59,6 +103,13 @@ int send_data(t_data data[], int count)
 int main(int argc, char *argv[])
 {
 	printf("\r\nMosquitto test SSL\r\n");
+
+	int rc = 0;
+
+	//Use log in /var/log/
+	#ifdef SYSLOG
+		openlog("ts_owrt_module",LOG_PID,LOG_USER);
+	#endif
 
 	char *cfg_file = "/etc/ts_module/ts_module.cfg";
 	if (argc > 1) cfg_file = argv[1];
@@ -82,13 +133,23 @@ int main(int argc, char *argv[])
 
 
 	int count_data = 0;
-	init_count(&count_data, cfg);
+	rc = init_count(&count_data, cfg);
+	#ifdef SYSLOG
+		if (!rc) syslog(LOG_ERR, "Init data count error %d", rc);
+	#endif
+
 	t_data data[count_data];
-	init_data(data, cfg);
+	rc = init_data(data, cfg);
+	#ifdef SYSLOG
+		if (!rc) syslog(LOG_ERR, "Init data error %d", rc);
+	#endif
 
 	timer_init(cfg);
 
-	mqtt_init(cfg);
+	rc = mqtt_init(cfg);
+	#ifdef SYSLOG
+		if (!rc) syslog(LOG_ERR, "Init MQTT error %d", rc);
+	#endif
 
 	// modbus_connect begin
 	ModbusError      status;
@@ -111,6 +172,14 @@ int main(int argc, char *argv[])
 	// modbus_connect end
 
 	while(1) {
+
+		if (send_mqtt_100ms) {
+
+			printf("Test Timer2\n");
+
+			send_mqtt_100ms = false;
+
+		}
 
 		if (send_mqtt_1m) {
 
@@ -160,9 +229,15 @@ int main(int argc, char *argv[])
 			send_mqtt_1m = false;
 		}
 
-		sleep(1);
+		usleep(100);
 
 	}
+
+	#ifdef SYSLOG
+		closelog();
+	#endif
+
+	fprintf(stdout, "ts_owrt_module stoped\n");
 
 	// modbus_connect begin
 	// modbusDeinit();

@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <modbus.h> 
 #include <libconfig.h>
+#include "ts_module_const.h"
 
 #define IP_BUF_SIZE            16  // Ip adress buf "192.168.111.222"
 #define MAX_CLIENT_NUM         10  // Max numbers of client, min 1 - max 128 
