@@ -77,6 +77,8 @@ int main(int argc, char *argv[])
 
 	logger_init("/tmp/log.txt");
 
+	LOG_E("Some error");
+
 	/* Read the file. If there is an error, report it and exit. */
 	if(! config_read_file(&cfg, cfg_file))
 	{

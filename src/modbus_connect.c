@@ -8,27 +8,6 @@
 #include <stdio.h>
 #include "modbus_connect.h"
 
-#define MODBUS_DEBUG 1
-
-/*
-#define LOG_MSG(msg) log_msg(msg, __FUNCTION__, __LINE__)
-#define ERR_MSG(msg) err_msg(msg, __FUNCTION__, __LINE__)
- 
-void log_msg(const char *msg, const char *func, const int line)
-{
-	if(MODBUS_DEBUG)
-    	printf("MSG: %s Fun: %s line: %d\n", msg, func, line);
-}
-
-void err_msg(const char *msg, const char *func, const int line)
-{
-	if(MODBUS_DEBUG)
-    	printf(stderr, "ERROR: %s Fun: %s line: %d\n", msg, func, line);
-    else
-    	printf(stderr, "ERROR: %s\n", msg);
-}
-*/
-
 ModbusSettings _modbusSettings;
 
 /**
@@ -172,22 +151,21 @@ ModbusError modbusInit(config_t cfg)
 	if(!modbusInitSettings(cfg))
 	{
 		fprintf(stderr, "modbusInit: ERROR: Can't init\n");
-		return MBE_INIT;
+		return MBE_FAIL;
 	}	
 
 	if(_modbusSettings.clientsCnt == 0)
 	{
 		fprintf(stderr, "modbusInit: ERROR: No clients\n");
-		return MBE_CLIENT;
+		return MBE_FAIL;
 	}
 	else if(_modbusSettings.clientsCnt > MAX_CLIENT_NUM)
 	{
 		fprintf(stderr, "modbusInit: ERROR: Too much clients, max  %d\n", MAX_CLIENT_NUM);
-		return MBE_CLIENT;
+		return MBE_FAIL;
 	}
 
-	if(MODBUS_DEBUG)
-		printf("Find %d clients\n", _modbusSettings.clientsCnt);
+	printf("Find %d clients\n", _modbusSettings.clientsCnt);
 
 	// Use _modbusSettings for connection
 	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
@@ -205,7 +183,7 @@ ModbusError modbusInit(config_t cfg)
 					_modbusSettings.clients[clientNum].ipAdress,
 					_modbusSettings.clients[clientNum].port);
 
-			return MBE_CONTEXT;
+			return MBE_FAIL;
 		}
 		
 		// Connect
@@ -215,7 +193,7 @@ ModbusError modbusInit(config_t cfg)
 					_modbusSettings.clients[clientNum].ipAdress,
 					_modbusSettings.clients[clientNum].port);
 
-			mbStatus = MBE_FAIL;
+			mbStatus = MBE_CONNECT;
 			continue;
 		}
 
@@ -224,10 +202,9 @@ ModbusError modbusInit(config_t cfg)
 		_modbusSettings.clients[clientNum].connected = true;
 		atLeastOne = true;
 
-		if(MODBUS_DEBUG)
-			printf("Connected to ip: %s, port: %d\n", 
-					_modbusSettings.clients[clientNum].ipAdress,
-					_modbusSettings.clients[clientNum].port);
+		printf("Connected to ip: %s, port: %d\n",
+				_modbusSettings.clients[clientNum].ipAdress,
+				_modbusSettings.clients[clientNum].port);
 	}
 
 	// Check status
@@ -235,6 +212,8 @@ ModbusError modbusInit(config_t cfg)
 	{
 		if(atLeastOne)
 			return MBE_NOT_ALL;
+		else if(mbStatus == MBE_CONNECT)
+			return MBE_CONNECT;
 		else
 			return MBE_FAIL;
 	}
@@ -282,7 +261,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 					    _modbusSettings.clients[clientNum].port);
 
 				_modbusSettings.clients[clientNum].connected = false;
-				mbStatus = MBE_FAIL;
+				mbStatus = MBE_CONNECT;
 				continue;	
 			}
 
@@ -293,6 +272,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 				return MBE_FAIL;
 			}
 
+			pDataList->clients[clientNum].received = true;
 			atLeastOne = true;
 		}
 		else
@@ -311,6 +291,8 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 	{
 		if(atLeastOne)
 			return MBE_NOT_ALL;
+		else if(mbStatus == MBE_CONNECT)
+			return MBE_CONNECT;
 		else
 			return MBE_FAIL;
 	}
@@ -378,6 +360,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 			return MBE_FAIL;
 		}
 
+		pData->received = true;
 	}
 	else
 	{
@@ -418,7 +401,7 @@ ModbusError modbusReconnect()
 							_modbusSettings.clients[clientNum].ipAdress,
 							_modbusSettings.clients[clientNum].port);
 
-					mbStatus = MBE_FAIL;
+					mbStatus = MBE_CONNECT;
 					continue;
 				}
 
@@ -432,7 +415,7 @@ ModbusError modbusReconnect()
 					    _modbusSettings.clients[clientNum].ipAdress, 
 					    _modbusSettings.clients[clientNum].port);
 
-				return MBE_INIT;
+				return MBE_FAIL;
 			}
 
 		}
@@ -443,6 +426,8 @@ ModbusError modbusReconnect()
 	{
 		if(atLeastOne)
 			return MBE_NOT_ALL;
+		else if(mbStatus == MBE_CONNECT)
+			return MBE_CONNECT;
 		else
 			return MBE_FAIL;
 	}

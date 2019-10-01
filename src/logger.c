@@ -6,22 +6,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include "logger.h"
-/*
- * Program name variable is provided by the libc
- */
-extern const char* __progname;
-
-/*
- * Logger internal sctructure
- */
-struct logger_t {
-	int max_log_level;
-	int use_stdout;
-	FILE* out_file;
-	void (*logger_func) (const int level, const char*);
-};
-
-#define PROGRAM_NAME __progname
 
 #define LOG_LEVEL_ERROR   0
 #define LOG_LEVEL_WARNING 1
@@ -37,6 +21,17 @@ struct logger_t {
 #define LOG_PREFIX_DEBUG   "DEBUG"
 
 /*
+ * Logger internal sctructure
+ */
+struct logger_t {
+	int max_log_level;
+	int use_stdout;
+	FILE* out_file;
+	void (*logger_func) (const int level, const char*);
+};
+
+/*
+ * Global log struct
 */  
 static struct logger_t log_global_set;
 
@@ -94,11 +89,10 @@ void print_to_syslog(const int level, const char* message)
  */
 void print_to_file(const int level, const char* message)
 {
-	int res;
+	int    res;
 	struct tm* current_tm;
 	time_t time_now;
-	char timeBuffer[30];
-
+	char   timeBuffer[30];
 
 	time(&time_now);
 	current_tm = localtime(&time_now);
@@ -131,6 +125,7 @@ void print_to_file(const int level, const char* message)
 }
 
 /*
+ * Init loger
  */
 bool logger_init(const char* filename)
 {
@@ -142,6 +137,7 @@ bool logger_init(const char* filename)
 }
 
 /*
+ * Sel log level
  */
 void logger_set_log_level(const int level)
 {
@@ -149,6 +145,7 @@ void logger_set_log_level(const int level)
 }
 
 /*
+ * Set log file name
  */
 int logger_set_log_file(const char* filename)
 {
@@ -167,6 +164,7 @@ int logger_set_log_file(const char* filename)
 }
 
 /*
+ * Set stdout as default
  */
 void logger_set_out_stdout()
 {
@@ -178,9 +176,8 @@ void logger_set_out_stdout()
 }
 
 /*
- * Logging functions
+ * Write buffer to log
  */
-
 void log_generic(const int level, const char* format, va_list args)
 {
 	char buffer[256];
@@ -188,6 +185,9 @@ void log_generic(const int level, const char* format, va_list args)
 	log_global_set.logger_func(level, buffer);
 }
 
+/*
+ * Write buffer to log with additions
+ */
 void log_generic_add(const int level, const char* format, va_list args, const char* fileName, const char* funName, int line)
 {
 	char buffer[256];
@@ -197,6 +197,9 @@ void log_generic_add(const int level, const char* format, va_list args, const ch
 	log_global_set.logger_func(level, buffer);
 }
 
+/*
+ * Write error log message
+ */
 void log_error(const char* fileName, int line, const char* funName, char* format, ...)
 {
 	va_list args;
@@ -205,6 +208,9 @@ void log_error(const char* fileName, int line, const char* funName, char* format
 	va_end(args);
 }
 
+/*
+ * Write warning log message
+ */
 void log_warning(char *format, ...)
 {
 	if (log_global_set.max_log_level < LOG_MAX_LEVEL_ERROR_WARNING_MESSAGE) {
@@ -217,6 +223,9 @@ void log_warning(char *format, ...)
 	va_end(args);
 }
 
+/*
+ * Write simple log message
+ */
 void log_info(char *format, ...)
 {
 	if (log_global_set.max_log_level < LOG_MAX_LEVEL_ERROR_WARNING_MESSAGE) {
@@ -229,6 +238,9 @@ void log_info(char *format, ...)
 	va_end(args);
 }
 
+/*
+ * Write debug log message
+ */
 void log_debug(const char* fileName, int line, const char* funName, char* format, ...)
 {
 	if (log_global_set.max_log_level <  LOG_MAX_LEVEL_ERROR_WARNING_MESSAGE_DEBUG) {

@@ -25,10 +25,7 @@ typedef enum
 {
 	MBE_OK,			// Ok
 	MBE_NOT_ALL,	// Not all clients, but at least one
-	MBE_CLIENT,		// Client error
-	MBE_CONTEXT,	// TCP Context error
 	MBE_CONNECT, 	// Connection error
-	MBE_INIT,		// Init error, need reinit
 	MBE_FAIL		// Unknown error
 } ModbusError;
 
@@ -76,9 +73,10 @@ typedef struct
  */
 typedef struct
 {
-	int id;							         // Client Id
+	int        id;							 // Client Id
 	const char *name;			 		 	 // Name(Data Point, Variable)
 	const char *unit;			 		 	 // Unit (h, kg, cm, m/s ...)
+	bool       received;					 // Received successful
 	ModbusDataType dataType;                 // Type of receive data
 	uint16_t data[MAX_RCV_DATA_LEN];		 // Received data
 	bool     data_bool;				     	 // Data in boolean format			
