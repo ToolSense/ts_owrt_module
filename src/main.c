@@ -13,6 +13,8 @@
 #include "ts_data.h"
 #include "ts_module_const.h"
 #include "logger.h"
+#include <syslog.h>
+#include <unistd.h>
 
 bool send_mqtt_1m = false;
 
@@ -73,8 +75,7 @@ int main(int argc, char *argv[])
 	config_t cfg;
 	config_init(&cfg);
 
-	logger_set_log_file("/tmp/log.txt");
-	log_error("This message goes to logfile");
+	logger_init("/tmp/log.txt");
 
 	/* Read the file. If there is an error, report it and exit. */
 	if(! config_read_file(&cfg, cfg_file))
@@ -106,11 +107,11 @@ int main(int argc, char *argv[])
 	}
 	else if(status == MBE_NOT_ALL)
 	{
-		fprintf(stdout, "Modbus: Not all clients inited\n");
+		fprintf(stdout, "ERROR: Modbus: Not all clients inited\n");
 	}
 	else
 	{
-		fprintf(stdout, "Modbus: Init error\n");
+		fprintf(stdout, "ERROR: Modbus: Init error\n");
 	}
 	// modbus_connect end
 
@@ -152,7 +153,7 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				fprintf(stdout, "Modbus: Receive error\n");
+				fprintf(stdout, "ERROR: Modbus: Receive error\n");
 				modbusReconnect();
 			}
 			// modbus_connect end
