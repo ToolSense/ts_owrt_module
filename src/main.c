@@ -11,7 +11,7 @@
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
 #include "ts_data.h"
-#include <syslog.h>
+#include "logger.h"
 
 typedef struct DeviceInitStatus
 {
