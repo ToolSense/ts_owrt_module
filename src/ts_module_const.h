@@ -1,4 +1,4 @@
-#define DELAY_SEND_TIME 900000 //sec
+
 #define MAX_BUF 128
 
 #define SYSLOG
@@ -6,11 +6,6 @@
 // Data alias
 #define TIME 0
 #define TEMP 1
-
-// 
-#define TIMER_5S 50
-#define TIMER_1S 10
-
 
 /**
  * Data type

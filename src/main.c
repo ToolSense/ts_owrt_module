@@ -11,74 +11,19 @@
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
 #include "ts_data.h"
-#include <syslog.h>
+#include "timer.h"
 
-typedef struct DeviceInitStatus
+#define INIT_CFG 0
+#define INIT_SYS 1
+#define PROCESS 2
+
+typedef struct DeviceStatus
 {
-	bool mqtt;
-	bool modbus;
-} init_status;
-
-
-
-bool send_mqtt_1m = false;
-bool send_mqtt_1s = false;
-bool send_mqtt_100ms = false;
-
-int timer_counter = 0;
-
-void timer_handler_1m()
-{
-	send_mqtt_1m = true;
-}
-
-void timer_handler_100ms()
-{
-	send_mqtt_100ms = true;
-	timer_counter++;
-
-	if ((timer_counter % TIMER_1S) == 0) {
-		send_mqtt_1s = true;
-	}
-
-	// if ((timer_counter % TIMER_5S) == 0) {
-	// 	send_mqtt_1m = true;
-	// }
-
-	// Maximum period - TIMER_5S
-	if (timer_counter == TIMER_5S) {
-		send_mqtt_1m = true;
-		timer_counter = 0;
-	}
-}
-
-void timer_init(config_t cfg)
-{
-	struct sigaction psa;
-	struct itimerval tv;
-	int timer_intr = 0;
-
-	if(!config_lookup_int(&cfg, "timer_intr", &timer_intr))
-		timer_intr = DELAY_SEND_TIME;
-
-	memset(&psa, 0, sizeof(psa));
-	psa.sa_handler = &timer_handler_100ms;
-	sigaction(SIGALRM, &psa, NULL);
-
-	// tv.it_interval.tv_sec = timer_intr;
-	// tv.it_interval.tv_usec = 0;
-	// tv.it_value.tv_sec = timer_intr;
-	// tv.it_value.tv_usec = 0;
-
-	tv.it_interval.tv_sec = 0;
-	tv.it_interval.tv_usec = timer_intr;
-	tv.it_value.tv_sec = 0;
-	tv.it_value.tv_usec = timer_intr;
-
-	// struct itimerval old, old2;
-	setitimer(ITIMER_REAL, &tv, NULL);
-	// setitimer(ITIMER_REAL, &tv2, &old2);
-}
+	int  state;		// set device process status
+	bool timer;		// t - timer enable
+	bool mqtt;		// t - MQTT init
+	bool modbus;	// t - ModBus init
+} device_status;
 
 int send_data(t_data data[], int count)
 {
@@ -92,32 +37,88 @@ int send_data(t_data data[], int count)
 
 
 	int rc = mqtt_send(buf, "temp");
-
-	#ifdef SYSLOG
-		syslog(LOG_INFO,"Send dada status %d", rc);
-	#endif
 		
 	return rc;
+}
+
+int init_sys(device_status *dev_status, config_t cfg) {
+
+	int rc = 0;
+
+	timer_stop();
+	dev_status->timer = false;
+
+	/* Init MQTT */
+	if (!dev_status->mqtt) {
+		rc = mqtt_init(cfg);
+		if (rc == 0) dev_status->mqtt = true;
+	}
+
+	/* Init ModBus */
+	if (!dev_status->modbus) {
+
+		// modbus_connect begin
+		ModbusError      status;
+		// ModbusClientData clientData;
+
+		status = modbusInit(cfg);
+
+		if(status == MBE_OK)
+		{
+			fprintf(stdout, "Modbus: Init OK\n");
+			dev_status->modbus = true;
+		}
+		else if(status == MBE_NOT_ALL)
+		{
+			fprintf(stdout, "Modbus: Not all clients inited\n");
+			dev_status->modbus = true;
+		}
+		else
+		{
+			fprintf(stdout, "Modbus: Init error\n");
+		}
+		// modbus_connect end
+	}
+
+	/* Init Timer after all */
+	if (!dev_status->timer && dev_status->modbus && dev_status->mqtt) {
+		timer_init();
+		rc = timer_start(TIMER_100mc);
+		if (rc == 0) dev_status->timer = true;
+	}
+
+	/* If all ok - change the status */
+	if (dev_status->timer && dev_status->modbus && dev_status->mqtt) {
+		printf("Init finished\n");
+		dev_status->state = PROCESS;
+	/* else wait and repeat */
+	} else {
+		printf("Wait init\n");
+		sleep(5);
+	}
+
+	return 0;
 }
 
 int main(int argc, char *argv[])
 {
 	printf("\r\nMosquitto test SSL\r\n");
 
+	//First, need to init devices and systems
+	device_status dev_status;
+	dev_status.state = INIT_SYS;
+	dev_status.timer = false;
+	dev_status.mqtt = false;
+	dev_status.modbus = false;
+
 	int rc = 0;
 
-	//Use log in /var/log/
-	#ifdef SYSLOG
-		openlog("ts_owrt_module",LOG_PID,LOG_USER);
-	#endif
+	/* Modbus status var*/
+	ModbusError status;
 
+	/* Init config file & data */
 	char *cfg_file = "/etc/ts_module/ts_module.cfg";
 	if (argc > 1) cfg_file = argv[1];
-
-	//Test cl arguments
-	// printf("argc=%d\n", argc);
-	// printf("argv[0]=%s\n", argv[0]);	
-	//------
 
 	config_t cfg;
 	config_init(&cfg);
@@ -131,111 +132,97 @@ int main(int argc, char *argv[])
 		return(EXIT_FAILURE);
 	}
 
-
 	int count_data = 0;
 	rc = init_count(&count_data, cfg);
-	#ifdef SYSLOG
-		if (!rc) syslog(LOG_ERR, "Init data count error %d", rc);
-	#endif
+	if (rc != DATA_ERR_SUCCESS) {
+		printf("Init data count err code: %d\n", rc);
+		return (rc);
+	}
 
 	t_data data[count_data];
 	rc = init_data(data, cfg);
-	#ifdef SYSLOG
-		if (!rc) syslog(LOG_ERR, "Init data error %d", rc);
-	#endif
-
-	timer_init(cfg);
-
-	rc = mqtt_init(cfg);
-	#ifdef SYSLOG
-		if (!rc) syslog(LOG_ERR, "Init MQTT error %d", rc);
-	#endif
-
-	// modbus_connect begin
-	ModbusError      status;
-	ModbusClientData clientData;
-
-	status = modbusInit(cfg);
-
-	if(status == MBE_OK)
-	{
-		fprintf(stdout, "Modbus: Init OK\n");
-	}
-	else if(status == MBE_NOT_ALL)
-	{
-		fprintf(stdout, "Modbus: Not all clients inited\n");
-	}
-	else
-	{
-		fprintf(stdout, "Modbus: Init error\n");
-	}
-	// modbus_connect end
+	if (rc != DATA_ERR_SUCCESS) {
+		printf("Init data err code: %d\n", rc);
+		return (rc);
+	}	
+	/* End init config file & data */
 
 	while(1) {
 
-		if (send_mqtt_100ms) {
+		switch (dev_status.state) {
+			case INIT_SYS:
+				/* Init system & devices */
+				init_sys(&dev_status, cfg);
+			break;
 
-			printf("Test Timer2\n");
+			case PROCESS: 
 
-			send_mqtt_100ms = false;
+				if (t_period.period_100ms) {
 
+					// printf("Test Timer2\n");
+
+					t_period.period_100ms = false;
+
+				}
+
+				if (t_period.period_1m) {
+
+					// modbus_connect begin
+					// Receive data
+					status = modbusReceiveDataId(&clientData, 1);
+
+					if(status == MBE_OK)
+					{
+						fprintf(stdout, "Modbus: Receive OK\n");
+
+
+						printf("Modbus data: Id: %d, name: %s, unit: %s, data: %02X:%02X:%02X:%02X \n", 
+							   clientData.id, clientData.name, clientData.unit, 
+							   clientData.data[0], clientData.data[1], clientData.data[2], clientData.data[3]);
+
+						if(clientData.dataType == MDT_INT)
+							printf("Int data: %d\n", clientData.data_int);
+						else if(clientData.dataType == MDT_BOOL)
+							printf("Bool data: %s\n", clientData.data_bool ? "true":"false");
+						else if(clientData.dataType == MDT_DWORD)
+							printf("Dword data: %d\n", clientData.data_dword);
+						else if(clientData.dataType == MDT_TIME)
+							printf("Time data: %s\n", ctime (&clientData.data_time));
+						else if(clientData.dataType == MDT_ENUM)
+							printf("Enum (int) data: %d\n", clientData.data_enum);
+						else
+							printf("Wrong data type: %d\n", (int)clientData.dataType);
+
+						// MQTT
+						if(clientData.dataType == MDT_INT)
+							data[TEMP].i_data = clientData.data_int;
+						else
+							data[TEMP].i_data = 25;
+					}
+					else
+					{
+						fprintf(stdout, "Modbus: Receive error\n");
+						// modbusReconnect();
+						dev_status.modbus = false;
+						dev_status.state = INIT_SYS;
+					}
+					// modbus_connect end
+
+					time(&data[TIME].l_data);
+
+					// mqtt_send("Test\n", "temp");
+					send_data(data, count_data);
+					t_period.period_1m = false;
+				}
+
+			break;
+
+			default: usleep(100);
 		}
 
-		if (send_mqtt_1m) {
-
-			// modbus_connect begin
-			// Receive data
-			status = modbusReceiveDataId(&clientData, 1);
-
-			if(status == MBE_OK)
-			{
-				fprintf(stdout, "Modbus: Receive OK\n");
-
-
-				printf("Modbus data: Id: %d, name: %s, unit: %s, data: %02X:%02X:%02X:%02X \n", 
-					   clientData.id, clientData.name, clientData.unit, 
-					   clientData.data[0], clientData.data[1], clientData.data[2], clientData.data[3]);
-
-				if(clientData.dataType == MDT_INT)
-					printf("Int data: %d\n", clientData.data_int);
-				else if(clientData.dataType == MDT_BOOL)
-					printf("Bool data: %s\n", clientData.data_bool ? "true":"false");
-				else if(clientData.dataType == MDT_DWORD)
-					printf("Dword data: %d\n", clientData.data_dword);
-				else if(clientData.dataType == MDT_TIME)
-					printf("Time data: %s\n", ctime (&clientData.data_time));
-				else if(clientData.dataType == MDT_ENUM)
-					printf("Enum (int) data: %d\n", clientData.data_enum);
-				else
-					printf("Wrong data type: %d\n", (int)clientData.dataType);
-
-				// MQTT
-				if(clientData.dataType == MDT_INT)
-					data[TEMP].i_data = clientData.data_int;
-				else
-					data[TEMP].i_data = 25;
-			}
-			else
-			{
-				fprintf(stdout, "Modbus: Receive error\n");
-				modbusReconnect();
-			}
-			// modbus_connect end
-
-			time(&data[TIME].l_data);
-
-			// mqtt_send("Test\n", "temp");
-			send_data(data, count_data);
-			send_mqtt_1m = false;
-		}
-
-		usleep(100);
+		// usleep(100);
 
 	}
-
-	#ifdef SYSLOG
-		closelog();
-	#endif
 
 	fprintf(stdout, "ts_owrt_module stoped\n");
 
