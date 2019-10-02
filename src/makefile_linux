@@ -1,7 +1,7 @@
 # These variables hold the name of the compilation tool, the compilation flags and the link flags
 # We make use of these variables in the package manifest
 TARGET = ts_owrt_module  
-CC = gcc
+CC = gcc -g
 CFLAGS = -Wall  -I/usr/include/modbus
 OBJDIR = ../bin
 LIBS=-lmodbus -lmosquitto -lconfig
