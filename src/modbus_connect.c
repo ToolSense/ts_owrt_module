@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include "logger.h"
 #include "modbus_connect.h"
 
 ModbusSettings _modbusSettings;
@@ -27,7 +28,7 @@ bool modbusInitSettings(config_t cfg)
 
 	if(modbusConf == NULL)
 	{
-		fprintf(stdout, "modbusInitSettings: ERROR: No modbus settings\n");
+		LOG_E("No modbus settings");
 		return false;
 	}
 
@@ -35,15 +36,13 @@ bool modbusInitSettings(config_t cfg)
 
 	if(_modbusSettings.clientsCnt == 0)
 	{
-		fprintf(stdout, "modbusInitSettings: ERROR: No modbus clients in settings file\n");
+		LOG_E("No modbus clients in settings file");
 		return false;
 	}
 
 	if(_modbusSettings.clientsCnt > MAX_CLIENT_NUM)
 	{
-		fprintf(stdout, "modbusInitSettings: ERROR: too many clients, got %d, max %d\n",
-			    _modbusSettings.clientsCnt, 
-			    MAX_CLIENT_NUM);
+		LOG_E("Too many clients, got %d, max %d", _modbusSettings.clientsCnt, MAX_CLIENT_NUM);
 
 		return false;
 	}
@@ -87,8 +86,8 @@ bool modbusInitSettings(config_t cfg)
 		}
 		else
 		{
-			fprintf(stderr, "modbusInitSettings: ERROR: Wrong data type: %s in client with ip: %s \n", 
-				    pDataType, _modbusSettings.clients[i].ipAdress);
+			LOG_E("Wrong data type: %s in client with ip: %s",
+				  pDataType, _modbusSettings.clients[i].ipAdress);
 			return false;	
 		}				
 	}
@@ -128,7 +127,7 @@ bool modbusFillDataType(ModbusClientData *pData)
 				break;
 
 			default:
-				fprintf(stderr, "modbusFillDataType: ERROR: Wrong data type\n");
+				LOG_E("Wrong data type");
 				return false;
 		}
 
@@ -150,22 +149,22 @@ ModbusError modbusInit(config_t cfg)
 	// Get settings from file to _modbusSettings
 	if(!modbusInitSettings(cfg))
 	{
-		fprintf(stderr, "modbusInit: ERROR: Can't init\n");
+		LOG_E("Can't init");
 		return MBE_FAIL;
 	}	
 
 	if(_modbusSettings.clientsCnt == 0)
 	{
-		fprintf(stderr, "modbusInit: ERROR: No clients\n");
+		LOG_E("No clients");
 		return MBE_FAIL;
 	}
 	else if(_modbusSettings.clientsCnt > MAX_CLIENT_NUM)
 	{
-		fprintf(stderr, "modbusInit: ERROR: Too much clients, max  %d\n", MAX_CLIENT_NUM);
+		LOG_E("Too much clients, max  %d", MAX_CLIENT_NUM);
 		return MBE_FAIL;
 	}
 
-	printf("Find %d clients\n", _modbusSettings.clientsCnt);
+	LOG("Find %d clients", _modbusSettings.clientsCnt);
 
 	// Use _modbusSettings for connection
 	for(clientNum = 0; clientNum < _modbusSettings.clientsCnt; clientNum++)
@@ -179,7 +178,7 @@ ModbusError modbusInit(config_t cfg)
 																    _modbusSettings.clients[clientNum].port);	
 		if (_modbusSettings.clients[clientNum].context == NULL) 
 		{
-			fprintf(stderr, "modbusInit: ERROR: Unable to allocate libmodbus context for ip: %s, port: %d\n", 
+			LOG_E("Unable to allocate libmodbus context for ip: %s, port: %d",
 					_modbusSettings.clients[clientNum].ipAdress,
 					_modbusSettings.clients[clientNum].port);
 
@@ -189,7 +188,7 @@ ModbusError modbusInit(config_t cfg)
 		// Connect
 		if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 		{
-			fprintf(stderr, "modbusInit: ERROR: Connection failed: %s, for ip: %s, port: %d\n", modbus_strerror(errno),
+			LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
 					_modbusSettings.clients[clientNum].ipAdress,
 					_modbusSettings.clients[clientNum].port);
 
@@ -202,9 +201,9 @@ ModbusError modbusInit(config_t cfg)
 		_modbusSettings.clients[clientNum].connected = true;
 		atLeastOne = true;
 
-		printf("Connected to ip: %s, port: %d\n",
-				_modbusSettings.clients[clientNum].ipAdress,
-				_modbusSettings.clients[clientNum].port);
+		LOG("Connected to ip: %s, port: %d",
+			_modbusSettings.clients[clientNum].ipAdress,
+			_modbusSettings.clients[clientNum].port);
 	}
 
 	// Check status
@@ -256,7 +255,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 
 			if (rc == -1) 
 			{
-				fprintf(stderr, "modbusReceiveData: ERROR: Recive data: %s, from ip: %s, port: %d\n", modbus_strerror(errno), 
+				LOG_E("Recive data: %s, from ip: %s, port: %d", modbus_strerror(errno),
 					    _modbusSettings.clients[clientNum].ipAdress, 
 					    _modbusSettings.clients[clientNum].port);
 
@@ -268,7 +267,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 			// Fill data according to type
 			if( !modbusFillDataType(&(pDataList->clients[clientNum])) )
 			{
-				fprintf(stderr, "ERROR: modbusReceiveData: Convert error\n");
+				LOG_E("Convert error");
 				return MBE_FAIL;
 			}
 
@@ -277,7 +276,7 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 		}
 		else
 		{
-			fprintf(stderr, "ERROR: Not connected client ip: %s, port: %d, need reconnect\n", 
+			LOG_E("Not connected client ip: %s, port: %d, need reconnect",
 					_modbusSettings.clients[clientNum].ipAdress, 
 					_modbusSettings.clients[clientNum].port);
 
@@ -326,7 +325,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 
 	if(!found)
 	{
-		fprintf(stderr, "modbusReceiveDataId: ERROR: No client with id: %d\n", id);
+		LOG_E("No client with id: %d", id);
 		return MBE_FAIL;
 	}
 
@@ -345,7 +344,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 
 		if (rc == -1) 
 		{
-			fprintf(stderr, "modbusReceiveDataId: ERROR: Recive data: %s, from ip: %s, port: %d\n", modbus_strerror(errno), 
+			LOG_E("Recive data: %s, from ip: %s, port: %d", modbus_strerror(errno),
 				    _modbusSettings.clients[clientNum].ipAdress, 
 				    _modbusSettings.clients[clientNum].port);
 
@@ -356,7 +355,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 		// Fill data according to type
 		if(!modbusFillDataType(pData))
 		{
-			fprintf(stderr, "ERROR: modbusReceiveDataId: Convert error\n");
+			LOG_E("Convert error");
 			return MBE_FAIL;
 		}
 
@@ -364,7 +363,7 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 	}
 	else
 	{
-		fprintf(stderr, "ERROR: Not connected client ip: %s, port: %d, need reconnect\n", 
+		LOG_E("Not connected client ip: %s, port: %d, need reconnect",
 				_modbusSettings.clients[clientNum].ipAdress, 
 				_modbusSettings.clients[clientNum].port);
 
@@ -397,7 +396,7 @@ ModbusError modbusReconnect()
 				// Connect
 				if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 				{
-					fprintf(stderr, "ERROR: Connection failed: %s, for ip: %s, port: %d\n", modbus_strerror(errno),
+					LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
 							_modbusSettings.clients[clientNum].ipAdress,
 							_modbusSettings.clients[clientNum].port);
 
@@ -411,7 +410,7 @@ ModbusError modbusReconnect()
 			}
 			else
 			{
-				fprintf(stderr, "ERROR: No context, need reinit, client ip: %s, port: %d\n", 
+				LOG_E("No context, need reinit, client ip: %s, port: %d",
 					    _modbusSettings.clients[clientNum].ipAdress, 
 					    _modbusSettings.clients[clientNum].port);
 
