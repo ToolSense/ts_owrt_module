@@ -30,6 +30,11 @@
 bool logger_init(const char* filename);
 
 /*
+ * Close logfile
+ */
+void logger_deinit();
+
+/*
  * Logging methods by levels
  */
 void log_error(const char* fileName, int line, const char* funName, char* format, ...);

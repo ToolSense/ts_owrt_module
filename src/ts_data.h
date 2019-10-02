@@ -2,10 +2,17 @@
 #include <libconfig.h>
 #include "ts_module_const.h"
 
+/* Error values */
+#define	DATA_ERR_SUCCESS 0
+#define	DATA_ERR_CONF_LOOKUP 1
+#define	DATA_ERR_COUNT 2
+#define	DATA_ERR_JSON 3
+#define	DATA_ERR_TYPE 4
 
 typedef struct DataStruct
 {
 	char *alias;
+	// TSDataType type;
 	int type;
 	bool b_data;
 	int i_data;

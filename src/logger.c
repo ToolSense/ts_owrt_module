@@ -137,6 +137,14 @@ bool logger_init(const char* filename)
 }
 
 /*
+ * Deinit loger
+ */
+void logger_deinit()
+{
+	cleanup_internal();
+}
+
+/*
  * Sel log level
  */
 void logger_set_log_level(const int level)
