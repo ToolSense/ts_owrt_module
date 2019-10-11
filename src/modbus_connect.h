@@ -43,6 +43,15 @@ typedef enum
 } ModbusDataType;
 
 /**
+ * Protocol type
+ */
+typedef enum
+{
+	MPT_TCP,		// TCP Protocol
+	MPT_RTU			// RTU Protocol
+} ModbusProtocolType;
+
+/**
  * Client info
  */
 typedef struct
@@ -52,12 +61,18 @@ typedef struct
 	int  offset;							 // Data offset (see modbus protocol)
 	int  registersToRead;				     // Number of registers to read from client
 	int  refreshRateMs;						 // Time to refresh data		
+	int  baudRate;			 		 		 // Baud rate (115200)
+	int  dataBit;							 // Data bit (8)
+	int  stopBit;							 // Stop bit (1)
 	bool connected;							 // Connected sign, changed automatically
 	const char *ipAdress;			 		 // TCP Adress
 	const char *unit;			 		 	 // Unit (h, kg, cm, m/s ...)
 	const char *name;			 		 	 // Name(Data Point, Variable)
-	modbus_t *context;						 // Modbus handler
+	const char *device;			 		 	 // Device (ttyUSB0)
+	const char *parity;			 		 	 // Parity(N)
+	modbus_t   *context;					 // Modbus handler
 	ModbusDataType dataType;                 // Type of receive data
+	ModbusProtocolType protocolType;		 // Protocol type (tcp, rtu)
 } ModbusClient;
 
 /**

@@ -21,6 +21,7 @@ bool modbusInitSettings(config_t cfg)
 {
 	int i;
 	const char       *pDataType;
+	const char       *pProtocolType;
 	config_setting_t *modbusConf;
 	config_setting_t *modbusClient;
 
@@ -53,12 +54,27 @@ bool modbusInitSettings(config_t cfg)
 		modbusClient = config_setting_get_elem(modbusConf, i);
 
 		config_setting_lookup_int(modbusClient,    "id",            &_modbusSettings.clients[i].id);
-		config_setting_lookup_int(modbusClient,    "port",          &_modbusSettings.clients[i].port);
 		config_setting_lookup_int(modbusClient,    "refreshRateMs", &_modbusSettings.clients[i].refreshRateMs);
 		config_setting_lookup_string(modbusClient, "unit",          &_modbusSettings.clients[i].unit);
-		config_setting_lookup_string(modbusClient, "ipAdress",      &_modbusSettings.clients[i].ipAdress);
 		config_setting_lookup_string(modbusClient, "name",          &_modbusSettings.clients[i].name);
+		config_setting_lookup_string(modbusClient, "protocol",      &pProtocolType);
 		config_setting_lookup_string(modbusClient, "dataType",      &pDataType);
+
+		if(strcmp(pProtocolType, "TCP") == 0)
+		{
+			_modbusSettings.clients[i].protocolType = MPT_TCP;
+			config_setting_lookup_int(modbusClient,    "port",          &_modbusSettings.clients[i].port);
+			config_setting_lookup_string(modbusClient, "ipAdress",      &_modbusSettings.clients[i].ipAdress);
+		}
+		else if(strcmp(pProtocolType, "RTU") == 0)
+		{
+			_modbusSettings.clients[i].protocolType = MPT_RTU;
+			config_setting_lookup_string(modbusClient, "device",         &_modbusSettings.clients[i].device);
+			config_setting_lookup_string(modbusClient, "parity",         &_modbusSettings.clients[i].parity);
+			config_setting_lookup_int(modbusClient,    "baudRate",       &_modbusSettings.clients[i].baudRate);
+			config_setting_lookup_int(modbusClient,    "dataBit",        &_modbusSettings.clients[i].dataBit);
+			config_setting_lookup_int(modbusClient,    "stopBit",        &_modbusSettings.clients[i].stopBit);
+		}
 
 		// Offset
 		_modbusSettings.clients[i].offset = 0; // Default for all clients
@@ -146,6 +162,10 @@ ModbusError modbusInit(config_t cfg)
 	bool atLeastOne = false;
 	ModbusError mbStatus = MBE_OK;
 
+
+	memset(&_modbusSettings, '\0', sizeof(ModbusSettings));
+
+	//modbus_new_rtu("/dev", 115200, 'N', 8, 1);
 	// Get settings from file to _modbusSettings
 	if(!modbusInitSettings(cfg))
 	{
@@ -173,37 +193,84 @@ ModbusError modbusInit(config_t cfg)
 		_modbusSettings.clients[clientNum].context   = NULL;
 		_modbusSettings.clients[clientNum].connected = false;
 
-		// Get context
-		_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress, 
-																    _modbusSettings.clients[clientNum].port);	
-		if (_modbusSettings.clients[clientNum].context == NULL) 
+		// Different connection according to protocol
+		if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
 		{
-			LOG_E("Unable to allocate libmodbus context for ip: %s, port: %d",
-					_modbusSettings.clients[clientNum].ipAdress,
-					_modbusSettings.clients[clientNum].port);
+			// Get context
+			_modbusSettings.clients[clientNum].context = modbus_new_tcp(_modbusSettings.clients[clientNum].ipAdress,
+																    	_modbusSettings.clients[clientNum].port);
 
-			return MBE_FAIL;
+			if (_modbusSettings.clients[clientNum].context == NULL)
+			{
+				LOG_E("Unable to allocate libmodbus context for ip: %s, port: %d",
+						_modbusSettings.clients[clientNum].ipAdress,
+						_modbusSettings.clients[clientNum].port);
+
+				return MBE_FAIL;
+			}
+
+			// Connect
+			if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1)
+			{
+				LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
+						_modbusSettings.clients[clientNum].ipAdress,
+						_modbusSettings.clients[clientNum].port);
+
+				mbStatus = MBE_CONNECT;
+				continue;
+			}
+
+			modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);
+
+			_modbusSettings.clients[clientNum].connected = true;
+
+			LOG("Connected to ip: %s, port: %d",
+				_modbusSettings.clients[clientNum].ipAdress,
+				_modbusSettings.clients[clientNum].port);
+
+		}
+		else // Modbus RTU protocol
+		{
+			// Get context
+			_modbusSettings.clients[clientNum].context = modbus_new_rtu(_modbusSettings.clients[clientNum].device,
+																		_modbusSettings.clients[clientNum].baudRate,
+																		_modbusSettings.clients[clientNum].parity[0],
+																		_modbusSettings.clients[clientNum].dataBit,
+																		_modbusSettings.clients[clientNum].stopBit);
+
+			if (_modbusSettings.clients[clientNum].context == NULL)
+			{
+				LOG_E("Unable to allocate libmodbus context for device: %s, baud: %d",
+						_modbusSettings.clients[clientNum].device,
+						_modbusSettings.clients[clientNum].baudRate);
+
+				return MBE_FAIL;
+			}
+
+			// Connect
+			if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1)
+			{
+				LOG_E("Connection failed error: %s, for client: %s, device: %s, baud: %d",
+						modbus_strerror(errno),
+						_modbusSettings.clients[clientNum].name,
+						_modbusSettings.clients[clientNum].device,
+						_modbusSettings.clients[clientNum].baudRate);
+
+				mbStatus = MBE_CONNECT;
+				continue;
+			}
+
+			modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);
+
+			_modbusSettings.clients[clientNum].connected = true;
+
+			LOG("Connected to client: %s, device: %s, baud: %d",
+				_modbusSettings.clients[clientNum].name,
+				_modbusSettings.clients[clientNum].device,
+				_modbusSettings.clients[clientNum].baudRate);
 		}
 		
-		// Connect
-		if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
-		{
-			LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
-					_modbusSettings.clients[clientNum].ipAdress,
-					_modbusSettings.clients[clientNum].port);
-
-			mbStatus = MBE_CONNECT;
-			continue;
-		}
-
-		modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);
-
-		_modbusSettings.clients[clientNum].connected = true;
 		atLeastOne = true;
-
-		LOG("Connected to ip: %s, port: %d",
-			_modbusSettings.clients[clientNum].ipAdress,
-			_modbusSettings.clients[clientNum].port);
 	}
 
 	// Check status
@@ -255,9 +322,20 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 
 			if (rc == -1) 
 			{
-				LOG_E("Recive data: %s, from ip: %s, port: %d", modbus_strerror(errno),
-					    _modbusSettings.clients[clientNum].ipAdress, 
-					    _modbusSettings.clients[clientNum].port);
+				if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+				{
+					LOG_E("Recive data error: %s, from ip: %s, port: %d", modbus_strerror(errno),
+							_modbusSettings.clients[clientNum].ipAdress,
+							_modbusSettings.clients[clientNum].port);
+				}
+				else // Modbus RTU
+				{
+					LOG_E("Recive data error: %s, client: %s, device: %s, baud: %d",
+						  modbus_strerror(errno),
+						  _modbusSettings.clients[clientNum].name,
+						  _modbusSettings.clients[clientNum].device,
+						  _modbusSettings.clients[clientNum].baudRate);
+				}
 
 				_modbusSettings.clients[clientNum].connected = false;
 				mbStatus = MBE_CONNECT;
@@ -276,10 +354,19 @@ ModbusError modbusReceiveData(ModbusClientsDataList *pDataList)
 		}
 		else
 		{
-			LOG_E("Not connected client ip: %s, port: %d, need reconnect",
-					_modbusSettings.clients[clientNum].ipAdress, 
-					_modbusSettings.clients[clientNum].port);
-
+			if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+			{
+				LOG_E("Not connected client ip: %s, port: %d, need reconnect",
+						_modbusSettings.clients[clientNum].ipAdress,
+						_modbusSettings.clients[clientNum].port);
+			}
+			else
+			{
+				LOG_E("Not connected client %s, device: %s, baud: %d",
+				_modbusSettings.clients[clientNum].name,
+				_modbusSettings.clients[clientNum].device,
+				_modbusSettings.clients[clientNum].baudRate);
+			}
 				
 			mbStatus = MBE_FAIL;			
 		}
@@ -344,9 +431,20 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 
 		if (rc == -1) 
 		{
-			LOG_E("Recive data: %s, from ip: %s, port: %d", modbus_strerror(errno),
-				    _modbusSettings.clients[clientNum].ipAdress, 
-				    _modbusSettings.clients[clientNum].port);
+			if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+			{
+				LOG_E("Recive data error: %s, from ip: %s, port: %d", modbus_strerror(errno),
+						_modbusSettings.clients[clientNum].ipAdress,
+						_modbusSettings.clients[clientNum].port);
+			}
+			else // Modbus RTU
+			{
+				LOG_E("Recive data error: %s, client: %s, device: %s, baud: %d",
+					  modbus_strerror(errno),
+					  _modbusSettings.clients[clientNum].name,
+					  _modbusSettings.clients[clientNum].device,
+					  _modbusSettings.clients[clientNum].baudRate);
+			}
 
 			_modbusSettings.clients[clientNum].connected = false;
 			return MBE_CONNECT;	
@@ -363,11 +461,20 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id)
 	}
 	else
 	{
-		LOG_E("Not connected client ip: %s, port: %d, need reconnect",
-				_modbusSettings.clients[clientNum].ipAdress, 
-				_modbusSettings.clients[clientNum].port);
+		if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+		{
+			LOG_E("Not connected client ip: %s, port: %d, need reconnect",
+					_modbusSettings.clients[clientNum].ipAdress,
+					_modbusSettings.clients[clientNum].port);
+		}
+		else
+		{
+			LOG_E("Not connected client %s, device: %s, baud: %d",
+			_modbusSettings.clients[clientNum].name,
+			_modbusSettings.clients[clientNum].device,
+			_modbusSettings.clients[clientNum].baudRate);
+		}
 
-			
 		return MBE_FAIL;			
 	}
 
@@ -396,27 +503,48 @@ ModbusError modbusReconnect()
 				// Connect
 				if (modbus_connect(_modbusSettings.clients[clientNum].context) == -1) 
 				{
-					LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
-							_modbusSettings.clients[clientNum].ipAdress,
-							_modbusSettings.clients[clientNum].port);
+					if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+					{
+						LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
+								_modbusSettings.clients[clientNum].ipAdress,
+								_modbusSettings.clients[clientNum].port);
+					}
+					else
+					{
+						LOG_E("Connection failed: %s, for client %s, device: %s, baud: %d",
+						modbus_strerror(errno),
+						_modbusSettings.clients[clientNum].name,
+						_modbusSettings.clients[clientNum].device,
+						_modbusSettings.clients[clientNum].baudRate);
+					}
 
 					mbStatus = MBE_CONNECT;
 					continue;
 				}
 
 				modbus_set_slave(_modbusSettings.clients[clientNum].context, _modbusSettings.clients[clientNum].id);	
-
 				_modbusSettings.clients[clientNum].connected = true;
+
+				LOG("Client %s reconnected", _modbusSettings.clients[clientNum].name);
 			}
 			else
 			{
-				LOG_E("No context, need reinit, client ip: %s, port: %d",
-					    _modbusSettings.clients[clientNum].ipAdress, 
-					    _modbusSettings.clients[clientNum].port);
+				if(_modbusSettings.clients[clientNum].protocolType == MPT_TCP)
+				{
+					LOG_E("No context, need reinit, client ip: %s, port: %d",
+							_modbusSettings.clients[clientNum].ipAdress,
+							_modbusSettings.clients[clientNum].port);
+				}
+				else
+				{
+					LOG_E("No context, need reinit client %s, device: %s, baud: %d",
+					_modbusSettings.clients[clientNum].name,
+					_modbusSettings.clients[clientNum].device,
+					_modbusSettings.clients[clientNum].baudRate);
+				}
 
 				return MBE_FAIL;
 			}
-
 		}
 	}
 
