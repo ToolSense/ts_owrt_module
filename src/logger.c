@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdbool.h>
+//#include <bzlib.h>
 #include "logger.h"
 
 #define LOG_LEVEL_ERROR   0
@@ -125,10 +126,65 @@ void print_to_file(const int level, const char* message)
 }
 
 /*
+ * Archive log file if needed
+ */
+bool logger_archive()
+{
+/* todo
+	int bzerror = 0;//BZ_OK;
+	int len;
+	FILE* fpout;
+	FILE* fpin;
+
+	char buf[1000];
+	int nBuf = 999;
+
+	fpout = fopen ( "/tmp/clog.bz2", "w" );
+	if (!fpout) {
+		return false;
+	}
+
+	fpin = fopen ( "/tmp/log.txt", "r" );
+	if (!fpin) {
+		return false;
+	}
+
+	BZFILE *bfp = BZ2_bzWriteOpen(&bzerror, fpout, 9, 0, 30);
+	if (bzerror != BZ_OK)
+	{
+	    BZ2_bzWriteClose(&bzerror, bfp, 0, NULL, NULL);
+	    //fclose(fpin);
+	    //fclose(fpout);
+	    return false;
+	}
+
+	memset(buf, 0, nBuf);
+	while (fgets(buf, nBuf, fpin) != NULL)
+	{
+	    len = strlen(buf);
+	    BZ2_bzWrite(&bzerror, bfp, buf, len);
+	    if (bzerror == BZ_IO_ERROR)
+	    {
+	        //std::cout << "bz-io-error detected\n";
+	        break;
+	    }
+	    memset(buf, 0, nBuf);
+	}
+	BZ2_bzWriteClose(&bzerror, bfp, 0, NULL, NULL);
+*/
+	return true;
+}
+
+/*
  * Init loger
  */
 bool logger_init(const char* filename)
 {
+	if(!logger_archive())
+	{
+		print_to_syslog(LOG_LEVEL_ERROR, "Unable to access to log file");
+	}
+
 	if(logger_set_log_file(filename) > 0)
 		return false;
 
@@ -200,7 +256,7 @@ void log_generic_add(const int level, const char* format, va_list args, const ch
 {
 	char buffer[256];
 
-	sprintf(buffer, "file: %s line: %d fun: %s ", fileName, line, funName);
+	sprintf(buffer, "file: %s line: %d fun: %s = ", fileName, line, funName);
 	vsprintf(&(buffer[strlen(buffer)]), format, args);
 	log_global_set.logger_func(level, buffer);
 }
