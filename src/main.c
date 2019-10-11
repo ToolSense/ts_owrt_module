@@ -117,6 +117,9 @@ int main(int argc, char *argv[])
 	/* Modbus status var*/
 	ModbusError status;
 
+	//Use log in /tmp
+	logger_init("/tmp/ts_owrt_module.txt");
+
 	/* Init config file & data */
 	char *cfg_file = "/etc/ts_module/ts_module.cfg";
 	if (argc > 1) cfg_file = argv[1];
