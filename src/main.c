@@ -98,6 +98,9 @@ int send_data(t_data data[], int count)
 
 int main(int argc, char *argv[])
 {
+	//Use log in /tmp
+	logger_init("/tmp/ts_owrt_module.txt");
+	
 	LOG("\r\nMosquitto test SSL\r\n");
 
 	int rc = 0;
