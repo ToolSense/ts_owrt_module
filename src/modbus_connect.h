@@ -116,5 +116,6 @@ ModbusError modbusReceiveDataId(ModbusClientData *pData, int id);
 ModbusError modbusReconnect();
 void        modbusDeinit();
 
+ModbusClientData clientData;
 
 #endif // MODBUS_CONNECT_H
