@@ -5,13 +5,17 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdbool.h>
-//#include <bzlib.h>
+#include <bzlib.h>
+#include <sys/stat.h>
 #include "logger.h"
 
-#define LOG_LEVEL_ERROR   0
-#define LOG_LEVEL_WARNING 1
-#define LOG_LEVEL_MESSAGE 2
-#define LOG_LEVEL_DEBUG   3
+#define LOG_LEVEL_ERROR    0
+#define LOG_LEVEL_WARNING  1
+#define LOG_LEVEL_MESSAGE  2
+#define LOG_LEVEL_DEBUG    3
+#define LOG_FILE_MAX_SIZE  1024 * 256
+#define LOG_STRING_MAX_LEN 1000
+#define LOG_FILE_NAME_MAX_LEN 80
 
 /*
  * Prefixes for the different logging levels
@@ -32,6 +36,11 @@ struct logger_t {
 };
 
 /*
+ * Global var
+*/
+char _logFileFullName[LOG_FILE_NAME_MAX_LEN +1];
+
+/*
  * Global log struct
 */  
 static struct logger_t log_global_set;
@@ -42,8 +51,25 @@ static const char* LOG_LEVELS[] = {
 				    LOG_PREFIX_MESSAGE,
 				    LOG_PREFIX_DEBUG };
 
+/*
+ * Defines
+*/
 void print_to_syslog(const int level, const char* message);
 void print_to_file(const int level, const char* message);
+
+/*
+ * Get size of file
+ */
+long int filesize( FILE *fp )
+ {
+    long int save_pos, size_of_file;
+
+    save_pos = ftell( fp );
+    fseek( fp, 0L, SEEK_END );
+    size_of_file = ftell( fp );
+    fseek( fp, save_pos, SEEK_SET );
+    return( size_of_file );
+ }
 
 /*
  * Close remaining file descriptor and reset global params
@@ -130,48 +156,132 @@ void print_to_file(const int level, const char* message)
  */
 bool logger_archive()
 {
-/* todo
-	int bzerror = 0;//BZ_OK;
 	int len;
-	FILE* fpout;
-	FILE* fpin;
+	int bzerror =  BZ_OK;
+	int nBuf    =  LOG_STRING_MAX_LEN-1;
+	char stringBuf[LOG_STRING_MAX_LEN];
 
-	char buf[1000];
-	int nBuf = 999;
+	// Path buf
+	char *pLogFileName;
+	char logFilePath       [LOG_FILE_NAME_MAX_LEN + 1];
+	char logZipFilePath    [LOG_FILE_NAME_MAX_LEN + 1];
+	char logZipFileFullName[LOG_FILE_NAME_MAX_LEN * 2];
 
-	fpout = fopen ( "/tmp/clog.bz2", "w" );
-	if (!fpout) {
+	// Time
+	struct tm* current_tm;
+	time_t time_now;
+	char timeBuffer[30];
+
+	// In/Out files
+	FILE* fLogZip;
+	FILE* fLog;
+
+	// Check log file name
+	if(strlen(_logFileFullName) == 0)
+	{
+		syslog(LOG_ERR, "Fun: logger_archive(), Error: No log file name");
 		return false;
 	}
 
-	fpin = fopen ( "/tmp/log.txt", "r" );
-	if (!fpin) {
+	// Get log file name
+	pLogFileName = strrchr(_logFileFullName, '/');
+	if(pLogFileName == NULL)
+	{
+		syslog(LOG_ERR, "Fun: logger_archive(), Error: Wrong file name %s", _logFileFullName);
+		return false;
+	}
+	pLogFileName++;
+
+	// Open log file
+	fLog = fopen (_logFileFullName, "r" );
+	if (!fLog) {
+		syslog(LOG_ERR, "Fun: logger_archive(), Error: Can't open %s", _logFileFullName);
 		return false;
 	}
 
-	BZFILE *bfp = BZ2_bzWriteOpen(&bzerror, fpout, 9, 0, 30);
+	// Check log file size
+	if(fLog)
+	{
+		if(filesize(fLog) < LOG_FILE_MAX_SIZE)
+		{
+			fclose(fLog);
+			return true;
+		}
+	}
+
+	// Get log file path
+	memset(logFilePath, '\0', LOG_FILE_NAME_MAX_LEN + 1);
+	memcpy(logFilePath, _logFileFullName, strlen(_logFileFullName) - strlen(pLogFileName));
+
+	// Get log zip file path
+	memset(logZipFilePath, '\0', LOG_FILE_NAME_MAX_LEN+1);
+	sprintf(logZipFilePath, "%s%s", logFilePath, "LogArchive/");
+
+	struct stat st = {0};
+	if (stat(logZipFilePath, &st) == -1)
+	{
+		if(mkdir(logZipFilePath, 0777) != 0)
+		{
+			syslog(LOG_ERR, "Fun: logger_archive(), Error: No permission, folder %s", logZipFilePath);
+			fclose(fLog);
+			return false;
+		}
+	}
+
+	// Get log zip full file path
+	time(&time_now);
+	current_tm = localtime(&time_now);
+	strftime(timeBuffer, 30, "%d.%m.%y-%H:%M:%S", current_tm);
+
+	sprintf(logZipFileFullName, "%s%s_%s.bz2", logZipFilePath, pLogFileName, timeBuffer);
+
+	// Start archiving
+	fLogZip = fopen (logZipFileFullName, "w" );
+	if (!fLogZip)
+	{
+		syslog(LOG_ERR, "Fun: logger_archive(), Error: Can't open file %s", logZipFileFullName);
+		fclose(fLog);
+		return false;
+	}
+
+	BZFILE *bfp = BZ2_bzWriteOpen(&bzerror, fLogZip, 9, 0, 30);
+
 	if (bzerror != BZ_OK)
 	{
 	    BZ2_bzWriteClose(&bzerror, bfp, 0, NULL, NULL);
-	    //fclose(fpin);
-	    //fclose(fpout);
+	    syslog(LOG_ERR, "Fun: logger_archive(), Error: BZ2_bzWriteOpen Can't open file %s", logZipFileFullName);
+	    fclose(fLog);
+	    fclose(fLogZip);
 	    return false;
 	}
 
-	memset(buf, 0, nBuf);
-	while (fgets(buf, nBuf, fpin) != NULL)
+	memset(stringBuf, 0, nBuf);
+	while (fgets(stringBuf, nBuf, fLog) != NULL)
 	{
-	    len = strlen(buf);
-	    BZ2_bzWrite(&bzerror, bfp, buf, len);
+	    len = strlen(stringBuf);
+	    BZ2_bzWrite(&bzerror, bfp, stringBuf, len);
 	    if (bzerror == BZ_IO_ERROR)
 	    {
-	        //std::cout << "bz-io-error detected\n";
+	    	syslog(LOG_ERR, "Fun: logger_archive(), Error: BZ2_bzWrite error");
 	        break;
 	    }
-	    memset(buf, 0, nBuf);
+	    memset(stringBuf, 0, nBuf);
 	}
 	BZ2_bzWriteClose(&bzerror, bfp, 0, NULL, NULL);
-*/
+
+    fclose(fLog);
+    fclose(fLogZip);
+
+    // Erase log file
+    fLog = fopen( _logFileFullName, "w" );
+	if (!fLog)
+	{
+		syslog(LOG_ERR, "Fun: logger_archive(), Error: Can't open file %s for write", _logFileFullName);
+		return false;
+	}
+
+    fclose(fLog);
+
 	return true;
 }
 
@@ -180,6 +290,19 @@ bool logger_archive()
  */
 bool logger_init(const char* filename)
 {
+	int logFileNameLen = strlen(filename);
+	if(logFileNameLen <= LOG_FILE_NAME_MAX_LEN)
+	{
+		memcpy(_logFileFullName, filename, logFileNameLen + 1);
+	}
+	else
+	{
+		LOG_E("To big file name %s, got %d, max %d, archiving does not work",
+			  filename, logFileNameLen, LOG_FILE_NAME_MAX_LEN);
+
+		_logFileFullName[0] = '\0';
+	}
+
 	if(!logger_archive())
 	{
 		print_to_syslog(LOG_LEVEL_ERROR, "Unable to access to log file");
@@ -218,7 +341,7 @@ int logger_set_log_file(const char* filename)
 	log_global_set.out_file = fopen(filename, "a");
 
 	if (log_global_set.out_file == NULL) {
-		log_error(__FILE__, __LINE__, __FUNCTION__, "Failed to open file %s error %s", filename, strerror(errno)); // svv uncomment
+		log_error(__FILE__, __LINE__, __FUNCTION__, "Failed to open file %s error %s", filename, strerror(errno));
 		return -1;
 	}
 

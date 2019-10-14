@@ -4,7 +4,7 @@ TARGET = ts_owrt_module
 CC = gcc -g
 CFLAGS = -Wall  -I/usr/include/modbus
 OBJDIR = ../bin
-LIBS=-lmodbus -lmosquitto -lconfig
+LIBS=-lmodbus -lmosquitto -lconfig -lbz2
 
 # Global target; when 'make' is run without arguments, this is what it should do
 all: $(OBJDIR) $(OBJDIR)/$(TARGET)
