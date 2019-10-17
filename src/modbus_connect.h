@@ -52,6 +52,16 @@ typedef enum
 } ModbusProtocolType;
 
 /**
+ * Refresh rate
+ */
+typedef enum
+{
+	RR_100ms,
+	RR_1s,
+	RR_1m
+} ModbusRefreshRate;
+
+/**
  * Client info
  */
 typedef struct
@@ -60,7 +70,6 @@ typedef struct
 	int  port;								 // TCP Port
 	int  offset;							 // Data offset (see modbus protocol)
 	int  registersToRead;				     // Number of registers to read from client
-	int  refreshRateMs;						 // Time to refresh data		
 	int  baudRate;			 		 		 // Baud rate (115200)
 	int  dataBit;							 // Data bit (8)
 	int  stopBit;							 // Stop bit (1)
@@ -71,7 +80,8 @@ typedef struct
 	const char *device;			 		 	 // Device (ttyUSB0)
 	const char *parity;			 		 	 // Parity(N)
 	modbus_t   *context;					 // Modbus handler
-	ModbusDataType dataType;                 // Type of receive data
+	ModbusDataType     dataType;             // Type of receive data
+	ModbusRefreshRate  refreshRate;			 // Time to refresh data
 	ModbusProtocolType protocolType;		 // Protocol type (tcp, rtu)
 } ModbusClient;
 
