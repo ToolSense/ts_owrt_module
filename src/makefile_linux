@@ -25,7 +25,7 @@ $(OBJDIR):
 
 # This rule builds individual object files, and depends on the corresponding C source files and the header files
 $(OBJDIR)/%.o: %.c $(DEPS)
-		$(CC) $(CFLAGS) -c $< -o $@
+		$(CC) $(CFLAGS) -c $< -o $@ 
 
 # To build 'ts_owrt_module', we depend on the object files, and link them all into a single executable using the compilation tool
 # We use automatic variables to specify the final executable name 'ts_owrt_module', using '$@' and the '$^' will hold the names of all the

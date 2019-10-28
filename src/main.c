@@ -10,10 +10,13 @@
 #include <libconfig.h>
 #include "mqtt_connect.h"
 #include "modbus_connect.h"
+#include "client_manager.h"
 #include "client_queue.h"
 #include "ts_data.h"
 #include "timer.h"
 #include "logger.h"
+
+#include "opc_connect.h"
 
 #define INIT_CFG 0
 #define INIT_SYS 1
@@ -24,7 +27,7 @@ typedef struct DeviceStatus
 	int  state;		// set device process status
 	bool timer;		// t - timer enable
 	bool mqtt;		// t - MQTT init
-	bool modbus;	// t - ModBus init
+	bool manager;	// t - Manager init
 } device_status;
 
 int send_data(t_data data[], int count)
@@ -46,6 +49,8 @@ int send_data(t_data data[], int count)
 int init_sys(device_status *dev_status, config_t cfg) {
 
 	int rc = 0;
+	int i;
+	const ClientSettings *pClientSettings;
 
 	timer_stop();
 	dev_status->timer = false;
@@ -56,44 +61,43 @@ int init_sys(device_status *dev_status, config_t cfg) {
 		if (rc == 0) dev_status->mqtt = true;
 	}
 
-	/* Init ModBus */
-	if (!dev_status->modbus) {
-		ModbusError      status;
+	/* Init Clients Manager and Queue */
+	if (!dev_status->manager) {
 
-		status = modbusInit(cfg);
+		if(!manager_init_config(cfg))
+		{
+			fprintf(stdout, "Manager ERROR: Wrong config\n");
+			return -1;
+		}
 
-		if(status == MBE_OK)
-		{
-			fprintf(stdout, "Modbus: Init OK\n");
-			dev_status->modbus = true;
-		}
-		else if(status == MBE_NOT_ALL)
-		{
-			fprintf(stdout, "Modbus: Not all clients inited\n");
-			dev_status->modbus = true;
-		}
-		else
-		{
-			fprintf(stdout, "Modbus: Init error\n");
-		}
-	}
+		if(!manager_init_connections())
+			fprintf(stdout, "Manager ERROR: Connection fail\n");
 
-	/* Init Modbus Clients queue */
-	if(!initQueue(cfg))
-	{
-		fprintf(stdout, "Queue: Init error\n");
-		dev_status->modbus = false;
+		// Init queue
+		queueCleen();
+		for(i = 0; i < MAX_CLIENT_NUM; i++)
+		{
+			pClientSettings = manager_get_client(i);
+			if(pClientSettings == NULL)
+				break; // All clients added
+
+			if(!queueAdd(pClientSettings->refreshRate, pClientSettings->innerIdx))
+			{
+				fprintf(stdout, "Queue ERROR: Can't add client: %s\n", pClientSettings->name);
+				return -1;
+			}
+		}
 	}
 
 	/* Init Timer after all */
-	if (!dev_status->timer && dev_status->modbus && dev_status->mqtt) {
+	if (!dev_status->timer && dev_status->manager && dev_status->mqtt) {
 		timer_init();
 		rc = timer_start(TIMER_100mc);
 		if (rc == 0) dev_status->timer = true;
 	}
 
 	/* If all ok - change the status */
-	if (dev_status->timer && dev_status->modbus && dev_status->mqtt) {
+	if (dev_status->timer && dev_status->manager && dev_status->mqtt) {
 		printf("Init finished\n");
 		dev_status->state = PROCESS;
 	/* else wait and repeat */
@@ -105,12 +109,8 @@ int init_sys(device_status *dev_status, config_t cfg) {
 	return 0;
 }
 
-void modbus_to_mqtt(ModbusClientData *pClientData, t_data data[])
+void modbus_to_mqtt(ClientData *pClientData, t_data data[])
 {
-	printf("Modbus data: Id: %d, name: %s, unit: %s, data: %02X:%02X:%02X:%02X \n",
-			pClientData->id, pClientData->name, pClientData->unit,
-			pClientData->data[0], pClientData->data[1], pClientData->data[2], pClientData->data[3]);
-
 	if(pClientData->dataType == MDT_INT)
 		printf("Int data: %d\n", pClientData->data_int);
 	else if(pClientData->dataType == MDT_BOOL)
@@ -137,19 +137,19 @@ int main(int argc, char *argv[])
 {
 	printf("\r\nMosquitto test SSL\r\n");
 
-	printf("\r\nMosquitto test SSL %d\r\n", sizeof(uint16_t));
 	//First, need to init devices and systems
 	device_status dev_status;
 	dev_status.state = INIT_SYS;
 	dev_status.timer = false;
 	dev_status.mqtt = false;
-	dev_status.modbus = false;
+	dev_status.manager = false;
 
 	int rc = 0;
-	int tempClientId;
-
-	/* Modbus status var*/
-	ModbusError status;
+	bool firstClient;
+	ClientData clientData;
+	InnerIdx tempClientIdx;
+	char clientName[MAX_CLIENT_NAME_LEN];
+	char unit[MAX_UNIT_NAME_LEN];
 
 	//Use log in /tmp
 	logger_init("/tmp/ts_owrt_module.txt");
@@ -185,7 +185,6 @@ int main(int argc, char *argv[])
 	}	
 	/* End init config file & data */
 
-
 	while(1) {
 
 		switch (dev_status.state) {
@@ -198,37 +197,34 @@ int main(int argc, char *argv[])
 
 				if (t_period.period_100ms) {
 
-					bool firstClient = true;
+					firstClient = true;
 
 					while(true)
 					{
 						// Get client ID
 						if(firstClient)
 						{
-							tempClientId = getFirstClientId(RR_100ms);
+							tempClientIdx = queueGetFirst(RR_100ms);
 							firstClient = false;
 						}
 						else
-							tempClientId = getNextClientId(RR_100ms);
+							tempClientIdx = queueGetNext(RR_100ms);
 
-						if(tempClientId == 0)
+						if(tempClientIdx == -1)
 							break; // All clients were surveyed
 
 
 						// Receive data
-						status = modbusReceiveDataId(&clientData, tempClientId);
-
-						if(status == MBE_OK)
+						if(manager_receive_data(tempClientIdx, &clientData, clientName, unit))
 						{
 							// Fill data
 							modbus_to_mqtt(&clientData, data);
+							fprintf(stdout, "DEBUG: Manager: Receive OK, client %s\n", clientName);
 						}
 						else
 						{
-							fprintf(stdout, "Modbus: Receive error\n");
-							// modbusReconnect();
-							dev_status.modbus = false;
-							dev_status.state  = INIT_SYS;
+							fprintf(stdout, "Manager: Receive error, client %s\n", clientName);
+							continue;
 						}
 
 						// Send data
@@ -244,37 +240,34 @@ int main(int argc, char *argv[])
 
 				if (t_period.period_1m) {
 
-					bool firstClient = true;
+					firstClient = true;
 
 					while(true)
 					{
 						// Get client ID
 						if(firstClient)
 						{
-							tempClientId = getFirstClientId(RR_1m);
+							tempClientIdx = queueGetFirst(RR_1m);
 							firstClient = false;
 						}
 						else
-							tempClientId = getNextClientId(RR_1m);
+							tempClientIdx = queueGetNext(RR_1m);
 
-						if(tempClientId == 0)
+						if(tempClientIdx == -1)
 							break; // All clients were surveyed
 
 
 						// Receive data
-						status = modbusReceiveDataId(&clientData, tempClientId);
-
-						if(status == MBE_OK)
+						if(manager_receive_data(tempClientIdx, &clientData, clientName, unit))
 						{
 							// Fill data
 							modbus_to_mqtt(&clientData, data);
+							fprintf(stdout, "DEBUG: Manager: Receive OK, client %s\n", clientName);
 						}
 						else
 						{
-							fprintf(stdout, "Modbus: Receive error\n");
-							// modbusReconnect();
-							dev_status.modbus = false;
-							dev_status.state  = INIT_SYS;
+							fprintf(stdout, "Manager: Receive error, client %s\n", clientName);
+							continue;
 						}
 
 						// Send data
@@ -290,37 +283,34 @@ int main(int argc, char *argv[])
 
 				if (t_period.period_1s) {
 
-					bool firstClient = true;
+					firstClient = true;
 
 					while(true)
 					{
 						// Get client ID
 						if(firstClient)
 						{
-							tempClientId = getFirstClientId(RR_1s);
+							tempClientIdx = queueGetFirst(RR_1s);
 							firstClient = false;
 						}
 						else
-							tempClientId = getNextClientId(RR_1s);
+							tempClientIdx = queueGetNext(RR_1s);
 
-						if(tempClientId == 0)
+						if(tempClientIdx == -1)
 							break; // All clients were surveyed
 
 
 						// Receive data
-						status = modbusReceiveDataId(&clientData, tempClientId);
-
-						if(status == MBE_OK)
+						if(manager_receive_data(tempClientIdx, &clientData, clientName, unit))
 						{
 							// Fill data
 							modbus_to_mqtt(&clientData, data);
+							fprintf(stdout, "DEBUG: Manager: Receive OK, client %s\n", clientName);
 						}
 						else
 						{
-							fprintf(stdout, "Modbus: Receive error\n");
-							// modbusReconnect();
-							dev_status.modbus = false;
-							dev_status.state  = INIT_SYS;
+							fprintf(stdout, "Manager: Receive error, client %s\n", clientName);
+							continue;
 						}
 
 						// Send data
