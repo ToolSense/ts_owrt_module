@@ -1,6 +1,8 @@
 #ifndef TS_MODULE_CONST_H
 #define TS_MODULE_CONST_H
 
+#include <time.h>
+
 #define MAX_BUF 128
 
 #define SYSLOG
@@ -23,8 +25,10 @@
 #define MAX_CLIENT_NUM      10  // Max numbers of client, min 0 - max 128
 #define MAX_CLIENT_NAME_LEN 80  // Max client name len
 #define MAX_UNIT_NAME_LEN   20  // Max unit name
+#define MAX_OPC_NODE_LEN    80  // Max opc ua node name len
 
 typedef unsigned int DWORD;
+typedef int InnerIdx;
 
 /**
  * Refresh rate

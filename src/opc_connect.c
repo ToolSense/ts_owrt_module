@@ -1,4 +1,5 @@
 #include "opc_connect.h"
+#include "logger.h"
 
 UA_Client *_handler;
 
@@ -54,18 +55,48 @@ bool opcConnect(const char *pServerName)
     return true;
 }
 
-bool opcReceiveData(OpcClient *pClient, OpcData *pData)
+bool opcReceiveData(OpcClient *pClient, ClientData *pData)
 {
     UA_Variant *val = UA_Variant_new();
-    UA_StatusCode retval = UA_Client_readValueAttribute(client, UA_NODEID_STRING(pClient->nameSpace, pClient->node), val);
+    UA_StatusCode retval;
+
+    char nodeName[MAX_OPC_NODE_LEN + 1] = {'\0'};
+
+    if(strlen(pClient->node) > MAX_OPC_NODE_LEN)
+    {
+    	LOG_E("Too big node name: %s, max %d chars", pClient->node, MAX_OPC_NODE_LEN);
+    	return false;
+    }
+
+    retval = UA_Client_readValueAttribute(_handler, UA_NODEID_STRING(pClient->nameSpace, nodeName), val);
 
     if(retval == UA_STATUSCODE_GOOD)
     {
     	pData->dataType = pClient->dataType;
 
-    	// svv here
-    	value = *(UA_Double*)val->data;
-    	printf("OPC OK, value: %lf\n", value);
+    	switch(pData->dataType)
+    	{
+    		case MDT_BOOL:
+    			pData->data_bool = *(UA_Boolean*)val->data;
+    			break;
+
+    		case MDT_INT:
+    		    pData->data_int = *(UA_UInt32*)val->data;
+    		    break;
+
+
+       		case MDT_DWORD:
+        		 pData->data_dword = *(UA_Double*)val->data;
+        		 break;
+
+       		case MDT_ENUM:
+       		     pData->data_enum = *(UA_UInt32*)val->data; // svv check it
+       		     break;
+
+       		default:
+       			LOG_E("Unsupported data type %d, node: %s\n", (int)pData->dataType, pClient->node);
+       			retval = UA_STATUSCODE_BADDATATYPEIDUNKNOWN;
+    	}
     }
     else
     {
@@ -80,5 +111,8 @@ bool opcReceiveData(OpcClient *pClient, OpcData *pData)
 void opcCloseConnection()
 {
 	if(_handler != NULL)
+	{
 		UA_Client_delete(_handler);
+		_handler = NULL;
+	}
 }

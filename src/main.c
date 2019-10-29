@@ -333,6 +333,8 @@ int main(int argc, char *argv[])
 
 	}
 
+	manager_close_all_connections();
+
 	fprintf(stdout, "ts_owrt_module stoped\n");
 
 	// modbus_connect begin

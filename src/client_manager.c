@@ -218,6 +218,7 @@ bool manager_init_config(config_t cfg)
 			return false;
 		}
 
+		// Protocol specific
 		if(_clientSettings[i].protocol == CP_MODBUS)
 		{
 			// Modbus settings
@@ -269,7 +270,11 @@ bool manager_init_config(config_t cfg)
 		}
 		else if(_clientSettings[i].protocol == CP_OPC)
 		{
-			// svv todo
+			config_setting_lookup_int(client,    "opc_ns",     &_clientSettings[i].opc.nameSpace);
+			config_setting_lookup_string(client, "opc_node",   &_clientSettings[i].opc.node);
+			config_setting_lookup_string(client, "opc_server", &_clientSettings[i].opc.serverName);
+
+			_clientSettings[i].opc.dataType = _clientSettings[i].dataType;
 		}
 	}
 
@@ -307,7 +312,18 @@ bool manager_init_connections()
 		}
 		else if(_clientSettings[i].protocol == CP_OPC)
 		{
-
+			if(opcConnect(_clientSettings[i].opc.serverName))
+			{
+				_clientSettings[i].connected = true;
+				LOG("Client: %s connected OK",_clientSettings[i].name);
+			}
+			else
+			{
+				_clientSettings[i].connected = false;
+				allClientsConnected = false;
+				LOG("Client: %s connection FAIL", _clientSettings[i].name);
+				continue;
+			}
 		}
 		else
 		{
@@ -377,12 +393,15 @@ bool manager_receive_data_simple(InnerIdx innerIdx, ClientData *pClientData)
 			_clientSettings[innerIdx].connected = false;
 			return false;
 		}
-
 	}
 	else if(_clientSettings[innerIdx].protocol == CP_OPC)
 	{
-
-
+		if(!opcReceiveData(&(_clientSettings[innerIdx].opc), pClientData))
+		{
+			LOG_E("Can't receive data, client: %s", _clientSettings[innerIdx].name);
+			_clientSettings[innerIdx].connected = false;
+			return false;
+		}
 	}
 	else
 	{
@@ -408,9 +427,9 @@ bool manager_reconnect(InnerIdx innerIdx)
 			return false;
 	}
 
+	// Reconnect
 	if(_clientSettings[innerIdx].protocol == CP_MODBUS)
 	{
-		// Reconnect
 		if( modbusReconnect(&(_clientSettings[innerIdx].modbus)) )
 		{
 			LOG("client: %s, reconnect OK", _clientSettings[innerIdx].name);
@@ -426,8 +445,18 @@ bool manager_reconnect(InnerIdx innerIdx)
 	}
 	else if(_clientSettings[innerIdx].protocol == CP_OPC)
 	{
-
-
+		opcCloseConnection();
+		if(opcConnect(_clientSettings[innerIdx].opc.serverName))
+		{
+			LOG("client: %s, reconnect OK", _clientSettings[innerIdx].name);
+			_clientSettings[innerIdx].connected = true;
+		}
+		else
+		{
+			LOG_E("Can't reconnect, client: %s", _clientSettings[innerIdx].name);
+			_clientSettings[innerIdx].connected = false;
+			return false;
+		}
 	}
 	else
 	{
@@ -503,15 +532,32 @@ bool manager_receive_data(InnerIdx innerIdx, ClientData *pClientData, char* pCli
 /**
  * Close all connections
  *
- * @return true - ok, false - error
  */
-bool manager_close_all_connections()
+void manager_close_all_connections()
 {
-// svv todo
+	int i;
+	bool opcClose = false;
 
 	// For all clients
 	for(i = 0; i < _clientsCnt; i++)
 	{
+		if(_clientSettings[i].protocol == CP_MODBUS)
+		{
+			modbusCloseConnection(&(_clientSettings[i].modbus));
+		}
+		else if(_clientSettings[i].protocol == CP_OPC)
+		{
+			if(!opcClose)
+			{
+				opcCloseConnection();
+				opcClose = true;
+			}
+		}
+		else
+		{
+			LOG_E("Wrong protocol");
+		}
 
+		_clientSettings[i].connected = false;
 	}
 }

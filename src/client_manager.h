@@ -7,8 +7,6 @@
 #include "modbus_connect.h"
 #include "opc_connect.h"
 
-typedef int InnerIdx;
-
 /**
  * Refresh rate
  */
@@ -17,18 +15,6 @@ typedef enum
 	CP_MODBUS,
 	CP_OPC
 } ClientProtocol;
-
-/**
- * Data type
- */
-typedef enum
-{
-	MDT_BOOL,		// Boolean
-	MDT_INT,		// Integer
-	MDT_DWORD,		// Double word
-	MDT_TIME,		// Time
-	MDT_ENUM		// Enumerate
-} DataType;
 
 /**
  * Client info
@@ -52,5 +38,6 @@ bool manager_reconnect(InnerIdx innerIdx);
 bool manager_receive_data(InnerIdx innerIdx, ClientData *pClientData, char* pClientName, char* pUnit);
 bool manager_receive_data_simple(InnerIdx innerIdx, ClientData *pClientData);
 const ClientSettings* manager_get_client(InnerIdx innerIdx);
+void manager_close_all_connections();
 
 #endif //CLIENT_MANAGER_H
