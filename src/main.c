@@ -135,7 +135,7 @@ void modbus_to_mqtt(ClientData *pClientData, t_data data[])
 
 int main(int argc, char *argv[])
 {
-	printf("\r\nMosquitto test SSL\r\n");
+	printf("\r\nStart\r\n");
 
 	//First, need to init devices and systems
 	device_status dev_status;

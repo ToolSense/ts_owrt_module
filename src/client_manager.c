@@ -141,16 +141,29 @@ bool manager_init_config(config_t cfg)
 
 		// Common settings
 		_clientSettings[i].innerIdx = i;
-		config_setting_lookup_string(client, "name",          &_clientSettings[i].name);
-		config_setting_lookup_string(client, "protocol",      &pProtocol);
-		config_setting_lookup_string(client, "refreshRate",   &pRefreshRate);
-		config_setting_lookup_string(client, "data_type",  	  &pDataType);
-		config_setting_lookup_string(client, "unit",          &_clientSettings[i].unit);
+		if(config_setting_lookup_string(client, "name",         &_clientSettings[i].name) != CONFIG_TRUE){
+			LOG_E("Wrong parameter name, client counter %d", i);
+			return false;
+		}
 
-		if(_clientSettings[i].name == NULL)
-		{
-			LOG_E("No name, client counter %d", i);
-				return false;
+		if(config_setting_lookup_string(client, "protocol",     &pProtocol) != CONFIG_TRUE){
+			LOG_E("Wrong parameter protocol, client: %s", _clientSettings[i].name);
+			return false;
+		}
+
+		if(config_setting_lookup_string(client, "refresh_rate ", &pRefreshRate) != CONFIG_TRUE){
+			LOG_E("Wrong parameter refresh_rate, client: %s", _clientSettings[i].name);
+			return false;
+		}
+
+		if(config_setting_lookup_string(client, "data_type",     &pDataType) != CONFIG_TRUE){
+			LOG_E("Wrong parameter data_type, client: %s", _clientSettings[i].name);
+			return false;
+		}
+
+		if(config_setting_lookup_string(client, "unit",          &_clientSettings[i].unit) != CONFIG_TRUE){
+			LOG_E("Wrong parameter unit, client: %s", _clientSettings[i].name);
+			return false;
 		}
 
 		if(strlen(_clientSettings[i].name) > MAX_CLIENT_NAME_LEN)
@@ -222,24 +235,58 @@ bool manager_init_config(config_t cfg)
 		if(_clientSettings[i].protocol == CP_MODBUS)
 		{
 			// Modbus settings
-			config_setting_lookup_int(client,    "mb_id",         &_clientSettings[i].modbus.id);
-			config_setting_lookup_string(client, "mb_type",       &pModbusType);
+			if(config_setting_lookup_int(client,    "mb_id",         &_clientSettings[i].modbus.id) != CONFIG_TRUE){
+				LOG_E("Wrong parameter mb_id, client: %s", _clientSettings[i].name);
+				return false;
+			}
+
+			if(config_setting_lookup_string(client, "mb_type",       &pModbusType) != CONFIG_TRUE){
+				LOG_E("Wrong parameter mb_type, client: %s", _clientSettings[i].name);
+				return false;
+			}
+
 
 			// Parse modbus type
 			if(strcmp(pModbusType, "TCP") == 0)
 			{
 				_clientSettings[i].modbus.protocolType = MPT_TCP;
-				config_setting_lookup_int(client,    "mb_port",          &_clientSettings[i].modbus.port);
-				config_setting_lookup_string(client, "mb_ip",      &_clientSettings[i].modbus.ipAdress);
+				if(config_setting_lookup_int(client,    "mb_port", &_clientSettings[i].modbus.port) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_port, client: %s", _clientSettings[i].name);
+					return false;
+				}
+
+				if(config_setting_lookup_string(client, "mb_ip",   &_clientSettings[i].modbus.ipAdress) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_ip, client: %s", _clientSettings[i].name);
+					return false;
+				}
 			}
 			else if(strcmp(pModbusType, "RTU") == 0)
 			{
 				_clientSettings[i].modbus.protocolType = MPT_RTU;
-				config_setting_lookup_string(client, "mb_device",         &_clientSettings[i].modbus.device);
-				config_setting_lookup_string(client, "mb_parity",         &_clientSettings[i].modbus.parity);
-				config_setting_lookup_int(client,    "mb_baudRate",       &_clientSettings[i].modbus.baudRate);
-				config_setting_lookup_int(client,    "mb_dataBit",        &_clientSettings[i].modbus.dataBit);
-				config_setting_lookup_int(client,    "mb_stopBit",        &_clientSettings[i].modbus.stopBit);
+				if(config_setting_lookup_string(client, "mb_device",    &_clientSettings[i].modbus.device) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_device, client: %s", _clientSettings[i].name);
+					return false;
+				}
+
+				if(config_setting_lookup_string(client, "mb_parity",    &_clientSettings[i].modbus.parity) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_parity, client: %s", _clientSettings[i].name);
+					return false;
+				}
+
+				if(config_setting_lookup_int(client,    "mb_baud_rate", &_clientSettings[i].modbus.baudRate) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_baud_rate, client: %s", _clientSettings[i].name);
+					return false;
+				}
+
+				if(config_setting_lookup_int(client,    "mb_data_bit",  &_clientSettings[i].modbus.dataBit) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_data_bit, client: %s", _clientSettings[i].name);
+					return false;
+				}
+
+				if(config_setting_lookup_int(client,    "mb_stop_bit",  &_clientSettings[i].modbus.stopBit) != CONFIG_TRUE){
+					LOG_E("Wrong parameter mb_stop_bit, client: %s", _clientSettings[i].name);
+					return false;
+				}
 			}
 
 			// Parse data type
@@ -270,9 +317,20 @@ bool manager_init_config(config_t cfg)
 		}
 		else if(_clientSettings[i].protocol == CP_OPC)
 		{
-			config_setting_lookup_int(client,    "opc_ns",     &_clientSettings[i].opc.nameSpace);
-			config_setting_lookup_string(client, "opc_node",   &_clientSettings[i].opc.node);
-			config_setting_lookup_string(client, "opc_server", &_clientSettings[i].opc.serverName);
+			if(config_setting_lookup_int(client,    "opc_ns",     &_clientSettings[i].opc.nameSpace) != CONFIG_TRUE){
+				LOG_E("Wrong parameter opc_ns, client: %s", _clientSettings[i].name);
+				return false;
+			}
+
+			if(config_setting_lookup_string(client, "opc_node",   &_clientSettings[i].opc.node) != CONFIG_TRUE){
+				LOG_E("Wrong parameter opc_node, client: %s", _clientSettings[i].name);
+				return false;
+			}
+
+			if(config_setting_lookup_string(client, "opc_server", &_clientSettings[i].opc.serverName) != CONFIG_TRUE){
+				LOG_E("Wrong parameter opc_server, client: %s", _clientSettings[i].name);
+				return false;
+			}
 
 			_clientSettings[i].opc.dataType = _clientSettings[i].dataType;
 		}
