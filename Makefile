@@ -7,7 +7,7 @@ PKG_VERSION:=0.0.4
 
 TARGET_CFLAGS=-I$(STAGING_DIR)/usr/include/modbus
 TARGET_LDFLAGS=-L$(STAGING_DIR)/usr/include/modbus
-PKG_BUILD_DEPENDS:=libmodbus libopenssl libconfig
+PKG_BUILD_DEPENDS:=libmodbus libopenssl libconfig libbz2
 
 # Source settings (i.e. where to find the source codes)
 # This is a custom variable, used below
@@ -20,7 +20,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=ToolSensePackages
   TITLE:=ts_owrt_module
-  DEPENDS:=+libmodbus +libmosquitto +libconfig
+  DEPENDS:=+libmodbus +libmosquitto +libconfig +libbz2
 endef
 
 # Package description; a more verbose description on what our package does
@@ -32,7 +32,7 @@ endef
 # The last command is necessary to ensure our preparation instructions remain compatible with the patching system.
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
-	cp $(SOURCE_DIR)/* $(PKG_BUILD_DIR)
+	cp -r $(SOURCE_DIR)/* $(PKG_BUILD_DIR)
 	$(Build/Patch)
 endef
 
