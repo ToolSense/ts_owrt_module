@@ -22,7 +22,7 @@
 #define	TS_TIME  5		// Time
 #define	TS_ENUM  6		// Enumerate
 
-#define MAX_CLIENT_NUM      10  // Max numbers of client, min 0 - max 128
+#define MAX_CLIENT_NUM      50  // Max numbers of client, min 0 - max 128
 #define MAX_CLIENT_NAME_LEN 80  // Max client name len
 #define MAX_UNIT_NAME_LEN   20  // Max unit name
 #define MAX_OPC_NODE_LEN    80  // Max opc ua node name len

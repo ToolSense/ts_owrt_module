@@ -255,6 +255,9 @@ bool logger_archive()
 	    return false;
 	}
 
+	syslog(LOG_INFO, "Archiving log, please wait... file: %s", _logFileFullName);
+	fprintf(stdout,  "Archiving log, please wait... file: %s", _logFileFullName);
+
 	memset(stringBuf, 0, nBuf);
 	while (fgets(stringBuf, nBuf, fLog) != NULL)
 	{
@@ -281,6 +284,9 @@ bool logger_archive()
 	}
 
     fclose(fLog);
+
+	syslog(LOG_INFO, "Archiving log done");
+	fprintf(stdout,  "Archiving log done");
 
 	return true;
 }

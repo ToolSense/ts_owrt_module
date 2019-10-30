@@ -48,6 +48,7 @@ bool opcConnect(const char *pServerName)
     if(retval != UA_STATUSCODE_GOOD)
     {
         UA_Client_delete(_handler);
+        _handler = NULL;
         LOG_E("Can't connect to server %s", pServerName);
         return false;
     }
@@ -57,16 +58,19 @@ bool opcConnect(const char *pServerName)
 
 bool opcReceiveData(OpcClient *pClient, ClientData *pData)
 {
-    UA_Variant *val = UA_Variant_new();
+    int nodeNameLen = strlen(pClient->node);
+	UA_Variant *val = UA_Variant_new();
     UA_StatusCode retval;
 
-    char nodeName[MAX_OPC_NODE_LEN + 1] = {'\0'};
+    char nodeName[MAX_OPC_NODE_LEN + 1];
 
-    if(strlen(pClient->node) > MAX_OPC_NODE_LEN)
+    if(nodeNameLen > MAX_OPC_NODE_LEN)
     {
     	LOG_E("Too big node name: %s, max %d chars", pClient->node, MAX_OPC_NODE_LEN);
     	return false;
     }
+
+    memcpy(nodeName, pClient->node, nodeNameLen + 1);
 
     retval = UA_Client_readValueAttribute(_handler, UA_NODEID_STRING(pClient->nameSpace, nodeName), val);
 

@@ -7,8 +7,49 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <endian.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+
+#include <netdb.h>
+
+
 #include "logger.h"
 #include "modbus_connect.h"
+
+bool checkServer(const char *pIpAdress, int port)
+{
+    int sockfd = 0;
+    struct sockaddr_in serv_addr;
+
+    if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        LOG_E("Could not create socket");
+        return false;
+    }
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+
+    if(inet_pton(AF_INET, pIpAdress, &serv_addr.sin_addr)<=0)
+    {
+        LOG_E("inet_pton error occured");
+        return false;
+    }
+
+    if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 )
+    {
+       LOG_E("Socket connection fail");
+       return false;
+    }
+
+    shutdown(sockfd, 2);
+
+    return true;
+}
 
 /**
  * Init modbus connection
@@ -36,21 +77,22 @@ bool modbusConnect(ModbusClient *pClient)
 			return false;
 		}
 
+		// Check connection
+		if(!checkServer(pClient->ipAdress, pClient->port))
+		{
+			LOG_E("No connection to ip: %s, port: %d", pClient->ipAdress, pClient->port);
+			return false;
+		}
+
 		// Connect
 		if (modbus_connect(pClient->context) != 0)
 		{
-			LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
+			LOG_E("Modbus protocol connection error: %s, for ip: %s, port: %d", modbus_strerror(errno),
 					pClient->ipAdress,
 					pClient->port);
 		}
 
 		modbus_set_slave(pClient->context, pClient->id);
-
-		LOG("Connected, modbus client: %d to ip: %s, port: %d",
-				pClient->id,
-				pClient->ipAdress,
-				pClient->port);
-
 	}
 	else // Modbus RTU protocol
 	{
@@ -81,11 +123,6 @@ bool modbusConnect(ModbusClient *pClient)
 		}
 
 		modbus_set_slave(pClient->context, pClient->id);
-
-		LOG("Connected, modbus client id: %d, device: %s, baud: %d",
-				pClient->id,
-				pClient->device,
-				pClient->baudRate);
 	}
 
 	return true;
@@ -109,7 +146,7 @@ bool modbusReceiveData(ModbusClient *pClient, ModbusData *pData)
 							   pClient->registersToRead,
 							   pData->data);
 
-	if (rc != 0)
+	if (rc < 0)
 	{
 		if(pClient->protocolType == MPT_TCP)
 		{
@@ -145,12 +182,19 @@ bool modbusReconnect(ModbusClient *pClient)
 
 	if(pClient->context != NULL)
 	{
+		// Check connection
+		if(!checkServer(pClient->ipAdress, pClient->port))
+		{
+			LOG_E("No connection to ip: %s, port: %d", pClient->ipAdress, pClient->port);
+			return false;
+		}
+
 		// Connect
 		if (modbus_connect(pClient->context) != 0)
 		{
 			if(pClient->protocolType == MPT_TCP)
 			{
-				LOG_E("Connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
+				LOG_E("Modbus protocol connection failed: %s, for ip: %s, port: %d", modbus_strerror(errno),
 						pClient->ipAdress,
 						pClient->port);
 			}
@@ -162,11 +206,11 @@ bool modbusReconnect(ModbusClient *pClient)
 				pClient->device,
 				pClient->baudRate);
 			}
+
+			return false;
 		}
 
 		modbus_set_slave(pClient->context, pClient->id);
-
-		LOG("Modbus client id %d reconnected OK", pClient->id);
 	}
 	else
 	{

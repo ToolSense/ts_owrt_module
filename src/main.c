@@ -87,6 +87,8 @@ int init_sys(device_status *dev_status, config_t cfg) {
 				return -1;
 			}
 		}
+
+		dev_status->manager = true;
 	}
 
 	/* Init Timer after all */

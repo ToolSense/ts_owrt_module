@@ -26,6 +26,8 @@ bool modbusToClientData(ModbusData *pData, DataType dataType, ClientData *pClien
 	uint16_t serviceData[MAX_RCV_DATA_LEN];
 
 
+	pClientData->dataType = dataType;
+
 	// Fill data according to type
 	switch(dataType)
 	{
@@ -151,7 +153,7 @@ bool manager_init_config(config_t cfg)
 			return false;
 		}
 
-		if(config_setting_lookup_string(client, "refresh_rate ", &pRefreshRate) != CONFIG_TRUE){
+		if(config_setting_lookup_string(client, "refresh_rate", &pRefreshRate) != CONFIG_TRUE){
 			LOG_E("Wrong parameter refresh_rate, client: %s", _clientSettings[i].name);
 			return false;
 		}
@@ -220,7 +222,7 @@ bool manager_init_config(config_t cfg)
 		{
 			_clientSettings[i].protocol = CP_MODBUS;
 		}
-		else if(strcmp(pModbusType, "opc") == 0)
+		else if(strcmp(pProtocol, "opc") == 0)
 		{
 			_clientSettings[i].protocol = CP_OPC;
 		}
@@ -235,12 +237,12 @@ bool manager_init_config(config_t cfg)
 		if(_clientSettings[i].protocol == CP_MODBUS)
 		{
 			// Modbus settings
-			if(config_setting_lookup_int(client,    "mb_id",         &_clientSettings[i].modbus.id) != CONFIG_TRUE){
+			if(config_setting_lookup_int(client,    "mb_id",      &_clientSettings[i].modbus.id) != CONFIG_TRUE){
 				LOG_E("Wrong parameter mb_id, client: %s", _clientSettings[i].name);
 				return false;
 			}
 
-			if(config_setting_lookup_string(client, "mb_type",       &pModbusType) != CONFIG_TRUE){
+			if(config_setting_lookup_string(client, "mb_type",    &pModbusType) != CONFIG_TRUE){
 				LOG_E("Wrong parameter mb_type, client: %s", _clientSettings[i].name);
 				return false;
 			}
@@ -348,6 +350,7 @@ bool manager_init_connections()
 {
 	int i;
 	bool allClientsConnected = true;
+	bool opcConnectedOk = false;
 
 	// For all clients
 	for(i = 0; i < _clientsCnt; i++)
@@ -358,29 +361,44 @@ bool manager_init_connections()
 			if(modbusConnect(&(_clientSettings[i].modbus)))
 			{
 				_clientSettings[i].connected = true;
-				LOG("Client: %s connected OK",_clientSettings[i].name);
+				LOG("Client: %s, connected OK",_clientSettings[i].name);
 			}
 			else
 			{
 				_clientSettings[i].connected = false;
 				allClientsConnected = false;
-				LOG("Client: %s connection FAIL", _clientSettings[i].name);
+
+				if(_clientSettings[i].modbus.protocolType == MPT_TCP)
+				{
+					LOG_E("Client: %s, connection FAIL, for ip: %s, port %d",
+							_clientSettings[i].name, _clientSettings[i].modbus.ipAdress, _clientSettings[i].modbus.port);
+				}
+				else
+				{
+					LOG_E("Client: %s, connection FAIL, device: %s, baud: %d",
+							_clientSettings[i].name, _clientSettings[i].modbus.device, _clientSettings[i].modbus.baudRate);
+				}
+
 				continue;
 			}
 		}
 		else if(_clientSettings[i].protocol == CP_OPC)
 		{
-			if(opcConnect(_clientSettings[i].opc.serverName))
+			if(!opcConnectedOk)
 			{
-				_clientSettings[i].connected = true;
-				LOG("Client: %s connected OK",_clientSettings[i].name);
-			}
-			else
-			{
-				_clientSettings[i].connected = false;
-				allClientsConnected = false;
-				LOG("Client: %s connection FAIL", _clientSettings[i].name);
-				continue;
+				if(opcConnect(_clientSettings[i].opc.serverName))
+				{
+					_clientSettings[i].connected = true;
+					opcConnectedOk = true;
+					LOG("Client: %s, connected OK",_clientSettings[i].name);
+				}
+				else
+				{
+					_clientSettings[i].connected = false;
+					allClientsConnected = false;
+					LOG_E("Client: %s, connection FAIL", _clientSettings[i].name);
+					continue;
+				}
 			}
 		}
 		else
@@ -490,7 +508,7 @@ bool manager_reconnect(InnerIdx innerIdx)
 	{
 		if( modbusReconnect(&(_clientSettings[innerIdx].modbus)) )
 		{
-			LOG("client: %s, reconnect OK", _clientSettings[innerIdx].name);
+			LOG("client: %s, reconnected OK", _clientSettings[innerIdx].name);
 			_clientSettings[innerIdx].connected = true;
 		}
 		else
@@ -506,7 +524,7 @@ bool manager_reconnect(InnerIdx innerIdx)
 		opcCloseConnection();
 		if(opcConnect(_clientSettings[innerIdx].opc.serverName))
 		{
-			LOG("client: %s, reconnect OK", _clientSettings[innerIdx].name);
+			LOG("client: %s, reconnected OK", _clientSettings[innerIdx].name);
 			_clientSettings[innerIdx].connected = true;
 		}
 		else
@@ -540,6 +558,13 @@ bool manager_receive_data(InnerIdx innerIdx, ClientData *pClientData, char* pCli
 				innerIdx, _clientsCnt-1, _clientSettings[innerIdx].name);
 			return false;
 	}
+
+	// Fill client info
+	if(pClientName)
+		memcpy(pClientName, _clientSettings[innerIdx].name, strlen(_clientSettings[innerIdx].name));
+
+	if(pUnit)
+		memcpy(pUnit, _clientSettings[innerIdx].unit, strlen(_clientSettings[innerIdx].unit));
 
 	// Check client connection state
 	if(!_clientSettings[innerIdx].connected)
@@ -577,12 +602,6 @@ bool manager_receive_data(InnerIdx innerIdx, ClientData *pClientData, char* pCli
 
 		_clientSettings[innerIdx].connected = true;
 	}
-
-	if(pClientName)
-		memcpy(pClientName, _clientSettings[innerIdx].name, strlen(_clientSettings[innerIdx].name));
-
-	if(pUnit)
-		memcpy(pUnit, _clientSettings[innerIdx].unit, strlen(_clientSettings[innerIdx].unit));
 
 	return true;
 }
