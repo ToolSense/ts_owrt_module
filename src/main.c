@@ -151,6 +151,9 @@ int main(int argc, char *argv[])
 	}	
 	/* End init config file & data */
 
+	//Test *char data
+	data[TYPE].ch_data = "Test"; 
+
 	while(1) {
 
 		switch (dev_status.state) {

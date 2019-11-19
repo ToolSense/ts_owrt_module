@@ -37,6 +37,7 @@ int init_data(t_data data[], config_t cfg)
 			if (strcmp(type_alias, "bool") == 0) data[i].type = TS_BOOL;
 			else if (strcmp(type_alias, "int") == 0) data[i].type = TS_INT;
 			else if (strcmp(type_alias, "long int") == 0) data[i].type = TS_LINT;
+			else if (strcmp(type_alias, "*char") == 0) data[i].type = TS_CHAR;
 			else return DATA_ERR_TYPE;
 
 		}
@@ -65,6 +66,10 @@ int get_json(char *buf, t_data data[], int count)
 
 			case TS_LINT:
 				length += sprintf (buf+length, "\"%s\": %ld,", data[i].alias, data[i].l_data);
+				break;
+
+			case TS_CHAR:
+				length += sprintf (buf+length, "\"%s\": \"%s\",", data[i].alias, data[i].ch_data);
 				break;
 			default: return 3;
 		}

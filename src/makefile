@@ -3,7 +3,7 @@ all: ts_owrt_module
  
 # These variables hold the name of the compilation tool, the compilation flags and the link flags
 # We make use of these variables in the package manifest
-CC = gcc
+CC = gcc -g
 CFLAGS = -Wall -I/usr/include/modbus
 LIBS=-lmodbus -lmosquitto -lconfig
  

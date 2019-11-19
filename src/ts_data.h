@@ -17,6 +17,7 @@ typedef struct DataStruct
 	bool b_data;
 	int i_data;
 	long int l_data;
+	char *ch_data;
 } t_data;
 
 int init_count(int *count, config_t cfg);

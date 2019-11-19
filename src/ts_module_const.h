@@ -6,6 +6,7 @@
 // Data alias
 #define TIME 0
 #define TEMP 1
+#define TYPE 2
 
 /**
  * Data type
@@ -17,6 +18,7 @@
 #define	TS_LINT  4		// Long integer
 #define	TS_TIME  5		// Time
 #define	TS_ENUM  6		// Enumerate
+#define	TS_CHAR  7		// *char
 
 // typedef enum
 // {
